@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_CONFIG } from '../config.js';
 import { SoundManager } from '../audio/SoundManager.js';
+import { InputManager, INPUT_CONFIGS } from '../input/InputManager.js';
 
 function getGrade(score) {
   if (score >= 15000) return { grade: 'S', color: '#ff6600' };
@@ -76,7 +77,7 @@ export class GameOverScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     // Restart prompt
-    const restartText = this.add.text(cx, 580, 'Press SPACE to Play Again', {
+    this.startText = this.add.text(cx, 580, 'Press Any Key to Play Again', {
       fontSize: '24px',
       fontFamily: 'monospace',
       color: '#ffff00',
@@ -85,7 +86,7 @@ export class GameOverScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     this.tweens.add({
-      targets: restartText,
+      targets: this.startText,
       alpha: 0.3,
       yoyo: true,
       repeat: -1,
@@ -99,21 +100,24 @@ export class GameOverScene extends Phaser.Scene {
       SoundManager.gameOver();
     }
 
-    // Input
-    this.input.keyboard.on('keydown-SPACE', () => {
-      SoundManager.menuSelect();
-      this.scene.start('GameScene');
-    });
-    this.input.keyboard.on('keydown-ENTER', () => {
-      SoundManager.menuSelect();
-      this.scene.start('GameScene');
-    });
+    this.started = false;
+    this.startDelay = 500; // Brief delay to avoid phantom inputs
+  }
 
-    if (this.input.gamepad) {
-      this.input.gamepad.on('down', () => {
-        SoundManager.menuSelect();
-        this.scene.start('GameScene');
-      });
+  restartGame(inputConfig) {
+    if (this.started) return;
+    this.started = true;
+    SoundManager.menuSelect();
+    this.scene.start('GameScene', { inputConfig });
+  }
+
+  update(time, delta) {
+    this.startDelay -= delta;
+    if (this.startDelay <= 0 && !this.started) {
+      const config = InputManager.detectAnyPress(this, []);
+      if (config) {
+        this.restartGame(config);
+      }
     }
   }
 }

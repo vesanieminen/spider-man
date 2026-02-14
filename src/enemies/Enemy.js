@@ -124,6 +124,14 @@ export class Enemy {
 
     // Bomb data
     this.bomb = null;
+
+    // Boss-specific state
+    this.grabTarget = null;
+    this.grabTimer = 0;
+    this.leapTarget = null;
+    this.flyingBaseY = null;
+    this.swoopStartY = null;
+    this.groundPoundPhase = null; // 'up' or 'down'
   }
 
   update(delta, playerX, playerY) {
@@ -147,6 +155,11 @@ export class Enemy {
     this.stateTimer += delta;
     this.x = this.body.x;
     this.y = this.body.y;
+
+    // HP regen for bosses with regenRate
+    if (this.type.regenRate && this.health < this.maxHealth) {
+      this.health = Math.min(this.maxHealth, this.health + this.type.regenRate * delta / 1000);
+    }
 
     // Stun countdown
     if (this.stunTimer > 0) {
@@ -181,6 +194,7 @@ export class Enemy {
         this.aiTimer += delta;
         this.attackCooldown -= delta;
 
+        // Normal melee attack
         if (this.attackCooldown <= 0 && dist < this.type.attackRange + 20) {
           this.enterState(ENEMY_STATES.ATTACK);
           this.attackCooldown = this.type.attackCooldown;
@@ -189,13 +203,13 @@ export class Enemy {
         }
 
         // Bomber flees when close
-        if (this.type.hasBomb && dist < this.type.fleeDistance) {
+        if (this.type.hasBomb && !this.type.hasFlying && dist < (this.type.fleeDistance || 200)) {
           this.enterState(ENEMY_STATES.FLEE);
           return;
         }
 
-        // Bomber throws from range
-        if (this.type.hasBomb && this.attackCooldown <= 0 && dist < this.type.attackRange) {
+        // Bomber/Goblin throws bomb from range
+        if (this.type.hasBomb && this.attackCooldown <= 0 && dist < (this.type.hasFlying ? 350 : this.type.attackRange)) {
           this.enterState(ENEMY_STATES.THROW);
           this.attackCooldown = this.type.attackCooldown;
           return;
@@ -208,11 +222,90 @@ export class Enemy {
           return;
         }
 
-        // Brute charge
+        // Tendril attack (Doc Ock, Venom) - extended range
+        if (this.type.hasTendril && this.attackCooldown <= 0 && dist < this.type.tendrilRange + 20 && dist > this.type.attackRange) {
+          this.enterState(ENEMY_STATES.TENDRIL);
+          this.attackCooldown = this.type.attackCooldown;
+          this.hasHit = false;
+          return;
+        }
+
+        // Grab attack (Venom, Doc Ock)
+        if (this.type.hasGrab && this.attackCooldown <= 0 && dist < this.type.attackRange + 30 && Math.random() < 0.3) {
+          this.enterState(ENEMY_STATES.GRAB);
+          this.attackCooldown = this.type.attackCooldown * 1.5;
+          this.hasHit = false;
+          this.grabTimer = 0;
+          return;
+        }
+
+        // Leap (Lizard)
+        if (this.type.hasLeap && this.attackCooldown <= 0 && dist > 80 && dist < this.type.leapRange) {
+          this.enterState(ENEMY_STATES.LEAP);
+          this.attackCooldown = this.type.attackCooldown;
+          this.hasHit = false;
+          this.leapTarget = { x: playerX, y: playerY };
+          const dir = dx > 0 ? 1 : -1;
+          this.body.body.setVelocity(dir * 350, -500);
+          return;
+        }
+
+        // Tail sweep (Lizard) - close range
+        if (this.type.hasTailSweep && this.attackCooldown <= 0 && dist < this.type.tailSweepRange + 10) {
+          this.enterState(ENEMY_STATES.TAIL_SWEEP);
+          this.attackCooldown = this.type.attackCooldown;
+          this.hasHit = false;
+          return;
+        }
+
+        // Swoop dive (Green Goblin)
+        if (this.type.hasSwoop && this.attackCooldown <= 0 && dist < 250 && this.type.hasFlying) {
+          this.enterState(ENEMY_STATES.SWOOP);
+          this.attackCooldown = this.type.attackCooldown;
+          this.hasHit = false;
+          this.swoopStartY = this.y;
+          const dir = dx > 0 ? 1 : -1;
+          this.body.body.setVelocity(dir * this.type.swoopSpeed, 400);
+          return;
+        }
+
+        // Charge (Brute, Venom, Rhino)
         if (this.type.hasCharge && this.attackCooldown <= 0 && dist > 100 && dist < 300) {
           this.enterState(ENEMY_STATES.CHARGE);
           this.attackCooldown = this.type.attackCooldown;
           this.hasHit = false;
+          return;
+        }
+
+        // Ground pound (Rhino, Brute) - close range
+        if (this.type.hasGroundPound && this.attackCooldown <= 0 && dist < this.type.groundPoundRange + 30 && Math.random() < 0.4) {
+          this.enterState(ENEMY_STATES.GROUND_POUND);
+          this.attackCooldown = this.type.attackCooldown;
+          this.hasHit = false;
+          this.groundPoundPhase = 'up';
+          this.body.body.setVelocityY(-500);
+          return;
+        }
+
+        // Flying movement (Green Goblin)
+        if (this.type.hasFlying) {
+          if (this.flyingBaseY === null) {
+            this.flyingBaseY = GAME_CONFIG.GROUND_Y - this.type.flyHeight;
+            this.body.body.setAllowGravity(false);
+          }
+          // Hover at fly height
+          const targetY = this.flyingBaseY + Math.sin(this.aiTimer / 500) * 20;
+          const yDiff = targetY - this.y;
+          this.body.body.setVelocityY(yDiff * 3);
+          // Move toward player horizontally
+          if (dist > 60) {
+            const dir = dx > 0 ? 1 : -1;
+            this.body.body.setVelocityX(dir * this.type.speed);
+            this.state = ENEMY_STATES.WALK;
+          } else {
+            this.body.body.setVelocityX(0);
+            this.state = ENEMY_STATES.IDLE;
+          }
           return;
         }
 
@@ -246,7 +339,6 @@ export class Enemy {
 
       case ENEMY_STATES.THROW:
         this.body.body.setVelocityX(0);
-        // Spawn projectile/bomb at midpoint
         if (this.stateTimer >= this.type.attackDuration * 0.5 && !this.hasHit) {
           this.hasHit = true;
           if (this.type.hasProjectile) {
@@ -264,7 +356,7 @@ export class Enemy {
         {
           const fleeDir = dx > 0 ? -1 : 1;
           this.body.body.setVelocityX(fleeDir * this.type.speed * 1.5);
-          if (dist > this.type.fleeDistance + 50 || this.stateTimer > 1000) {
+          if (dist > (this.type.fleeDistance || 200) + 50 || this.stateTimer > 1000) {
             this.enterState(ENEMY_STATES.IDLE);
           }
         }
@@ -281,9 +373,75 @@ export class Enemy {
         break;
 
       case ENEMY_STATES.DEAD:
-        // Ragdoll: let physics carry the body, apply gravity and drag
         if (this.ragdoll) {
           this.updateRagdoll(delta);
+        }
+        break;
+
+      // === BOSS STATES ===
+
+      case ENEMY_STATES.TENDRIL:
+        this.body.body.setVelocityX(0);
+        if (this.stateTimer >= this.type.attackDuration) {
+          this.enterState(ENEMY_STATES.IDLE);
+        }
+        break;
+
+      case ENEMY_STATES.GRAB:
+        this.body.body.setVelocityX(0);
+        this.grabTimer += delta;
+        if (this.grabTimer >= (this.type.grabDuration || 1000)) {
+          this.grabTarget = null;
+          this.enterState(ENEMY_STATES.IDLE);
+        }
+        break;
+
+      case ENEMY_STATES.LEAP:
+        // Airborne leap - land when hitting ground
+        if (this.body.body.blocked.down && this.stateTimer > 200) {
+          this.hasHit = false; // Can damage on landing too
+          this.enterState(ENEMY_STATES.IDLE);
+        }
+        if (this.stateTimer > 1000) {
+          this.enterState(ENEMY_STATES.IDLE);
+        }
+        break;
+
+      case ENEMY_STATES.TAIL_SWEEP:
+        this.body.body.setVelocityX(0);
+        if (this.stateTimer >= this.type.attackDuration) {
+          this.enterState(ENEMY_STATES.IDLE);
+        }
+        break;
+
+      case ENEMY_STATES.SWOOP:
+        // Swoop down then return to flying height
+        if (this.stateTimer > 400) {
+          // Return to fly height
+          if (this.type.hasFlying) {
+            this.body.body.setAllowGravity(false);
+          }
+          this.enterState(ENEMY_STATES.IDLE);
+        }
+        break;
+
+      case ENEMY_STATES.GROUND_POUND:
+        if (this.groundPoundPhase === 'up') {
+          if (this.body.body.velocity.y >= 0 || this.stateTimer > 300) {
+            this.groundPoundPhase = 'down';
+            this.body.body.setVelocityY(800);
+            this.body.body.setVelocityX(0);
+          }
+        } else if (this.groundPoundPhase === 'down') {
+          if (this.body.body.blocked.down) {
+            this.groundPoundPhase = null;
+            this.enterState(ENEMY_STATES.IDLE);
+            // Shockwave handled by GameScene
+          }
+        }
+        if (this.stateTimer > 1200) {
+          this.groundPoundPhase = null;
+          this.enterState(ENEMY_STATES.IDLE);
         }
         break;
     }
@@ -353,13 +511,12 @@ export class Enemy {
 
     // Draw bomb
     b.graphics.clear();
-    b.graphics.fillStyle(this.type.color, 0.9);
+    const bombColor = this.type.isBoss ? this.type.accentColor || this.type.color : this.type.color;
+    b.graphics.fillStyle(bombColor, 0.9);
     b.graphics.fillCircle(b.x, b.y, 6);
-    // Fuse spark
     b.graphics.fillStyle(0xffff00, 0.8);
     b.graphics.fillCircle(b.x + 3, b.y - 6, 2);
 
-    // Explode on ground or timeout
     if (b.y >= GAME_CONFIG.GROUND_Y || b.timer > 1500) {
       b.alive = false;
       b.graphics.destroy();
@@ -377,7 +534,14 @@ export class Enemy {
   }
 
   isAttacking() {
-    return this.state === ENEMY_STATES.ATTACK || this.state === ENEMY_STATES.CHARGE;
+    return this.state === ENEMY_STATES.ATTACK ||
+           this.state === ENEMY_STATES.CHARGE ||
+           this.state === ENEMY_STATES.TENDRIL ||
+           this.state === ENEMY_STATES.GRAB ||
+           this.state === ENEMY_STATES.LEAP ||
+           this.state === ENEMY_STATES.TAIL_SWEEP ||
+           this.state === ENEMY_STATES.SWOOP ||
+           this.state === ENEMY_STATES.GROUND_POUND;
   }
 
   isOnActiveFrame() {
@@ -388,6 +552,26 @@ export class Enemy {
     if (this.state === ENEMY_STATES.CHARGE) {
       return this.stateTimer > 100;
     }
+    if (this.state === ENEMY_STATES.TENDRIL) {
+      const dur = this.type.attackDuration;
+      return this.stateTimer >= dur * 0.3 && this.stateTimer <= dur * 0.6;
+    }
+    if (this.state === ENEMY_STATES.GRAB) {
+      return this.stateTimer >= 100 && this.stateTimer <= 300;
+    }
+    if (this.state === ENEMY_STATES.LEAP) {
+      return this.stateTimer > 150;
+    }
+    if (this.state === ENEMY_STATES.TAIL_SWEEP) {
+      const dur = this.type.attackDuration;
+      return this.stateTimer >= dur * 0.25 && this.stateTimer <= dur * 0.65;
+    }
+    if (this.state === ENEMY_STATES.SWOOP) {
+      return this.stateTimer > 100 && this.stateTimer < 350;
+    }
+    if (this.state === ENEMY_STATES.GROUND_POUND) {
+      return this.groundPoundPhase === 'down' && this.body.body.blocked.down;
+    }
     return false;
   }
 
@@ -397,6 +581,51 @@ export class Enemy {
         damage: this.type.chargeDamage || this.type.damage,
         range: 40,
         knockback: 350,
+      };
+    }
+    if (this.state === ENEMY_STATES.TENDRIL) {
+      return {
+        damage: this.type.damage,
+        range: this.type.tendrilRange || 120,
+        knockback: 200,
+      };
+    }
+    if (this.state === ENEMY_STATES.GRAB) {
+      return {
+        damage: this.type.grabDamage || this.type.damage,
+        range: this.type.attackRange + 20,
+        knockback: 50,
+        isGrab: true,
+      };
+    }
+    if (this.state === ENEMY_STATES.LEAP) {
+      return {
+        damage: this.type.leapDamage || this.type.damage,
+        range: 50,
+        knockback: 300,
+      };
+    }
+    if (this.state === ENEMY_STATES.TAIL_SWEEP) {
+      return {
+        damage: this.type.tailSweepDamage || this.type.damage,
+        range: this.type.tailSweepRange || 90,
+        knockback: 250,
+        bothSides: true,
+      };
+    }
+    if (this.state === ENEMY_STATES.SWOOP) {
+      return {
+        damage: this.type.swoopDamage || this.type.damage,
+        range: 50,
+        knockback: 300,
+      };
+    }
+    if (this.state === ENEMY_STATES.GROUND_POUND) {
+      return {
+        damage: this.type.groundPoundDamage || this.type.damage,
+        range: this.type.groundPoundRange || 80,
+        knockback: 200,
+        isShockwave: true,
       };
     }
     return {
@@ -410,6 +639,28 @@ export class Enemy {
     if (!this.isAttacking() || !this.isOnActiveFrame()) return null;
     const attack = this.getAttackData();
     const dir = this.facingRight ? 1 : -1;
+    const s = this.type.bodyScale;
+
+    // Tail sweep hits both sides
+    if (attack.bothSides) {
+      return new Phaser.Geom.Rectangle(
+        this.x - attack.range,
+        this.y - GAME_CONFIG.BODY_HEIGHT * s / 2,
+        attack.range * 2,
+        GAME_CONFIG.BODY_HEIGHT * s
+      );
+    }
+
+    // Ground pound shockwave is a circle around enemy
+    if (attack.isShockwave) {
+      return new Phaser.Geom.Rectangle(
+        this.x - attack.range,
+        this.y - attack.range / 2,
+        attack.range * 2,
+        attack.range
+      );
+    }
+
     const hbX = dir > 0
       ? this.x + GAME_CONFIG.BODY_WIDTH / 2
       : this.x - GAME_CONFIG.BODY_WIDTH / 2 - attack.range;
@@ -443,6 +694,11 @@ export class Enemy {
       return false;
     }
 
+    // Release grab if grabbing
+    if (this.state === ENEMY_STATES.GRAB) {
+      this.grabTarget = null;
+    }
+
     this.health -= amount;
     this.body.body.setVelocityX(knockbackX);
     this.body.body.setVelocityY(knockbackY);
@@ -450,6 +706,10 @@ export class Enemy {
     if (this.health <= 0) {
       this.health = 0;
       this.alive = false;
+      // Restore gravity if flying
+      if (this.type.hasFlying) {
+        this.body.body.setAllowGravity(true);
+      }
       this.createRagdoll(knockbackX, knockbackY);
       this.enterState(ENEMY_STATES.DEAD);
       return true;
@@ -471,7 +731,6 @@ export class Enemy {
   }
 
   createRagdoll(knockbackX, knockbackY) {
-    // Create ragdoll body parts that fly independently
     const s = this.type.bodyScale;
     const parts = [
       { name: 'head', ox: 0, oy: -50 * s, size: GAME_CONFIG.HEAD_RADIUS * this.type.headRadius, shape: 'circle' },
@@ -496,7 +755,6 @@ export class Enemy {
       };
     });
 
-    // Hide the physics body and clean up UI
     this.body.body.setVelocity(0, 0);
     this.body.body.setAllowGravity(false);
     this.hpGraphics.clear();
@@ -514,7 +772,6 @@ export class Enemy {
       p.y += p.vy * dt;
       p.rot += p.rotSpeed * dt;
 
-      // Bounce off ground
       if (p.y > groundY - 5) {
         p.y = groundY - 5;
         p.vy = -p.vy * 0.4;
@@ -533,6 +790,7 @@ export class Enemy {
     switch (this.state) {
       case ENEMY_STATES.WALK:
       case ENEMY_STATES.FLEE:
+      case ENEMY_STATES.FLYING:
         const walkT = (this.stateTimer % 400) / 400;
         pose = walkT < 0.5
           ? lerpPose(ENEMY_WALK_A, ENEMY_WALK_B, walkT * 2)
@@ -541,10 +799,32 @@ export class Enemy {
       case ENEMY_STATES.ATTACK:
       case ENEMY_STATES.CHARGE:
       case ENEMY_STATES.THROW:
+      case ENEMY_STATES.TENDRIL:
+      case ENEMY_STATES.GRAB:
+      case ENEMY_STATES.SWOOP:
         const atkT = this.stateTimer / this.type.attackDuration;
         if (atkT < 0.3) pose = lerpPose(ENEMY_IDLE, ENEMY_ATTACK, atkT / 0.3);
         else if (atkT < 0.6) pose = ENEMY_ATTACK;
         else pose = lerpPose(ENEMY_ATTACK, ENEMY_IDLE, (atkT - 0.6) / 0.4);
+        break;
+      case ENEMY_STATES.LEAP:
+        // Crouched then extended pose
+        const leapT = Math.min(this.stateTimer / 300, 1);
+        pose = lerpPose(ENEMY_IDLE, ENEMY_ATTACK, leapT);
+        break;
+      case ENEMY_STATES.TAIL_SWEEP:
+        // Spin-like attack pose
+        const sweepT = this.stateTimer / this.type.attackDuration;
+        if (sweepT < 0.3) pose = lerpPose(ENEMY_IDLE, ENEMY_ATTACK, sweepT / 0.3);
+        else if (sweepT < 0.65) pose = ENEMY_ATTACK;
+        else pose = lerpPose(ENEMY_ATTACK, ENEMY_IDLE, (sweepT - 0.65) / 0.35);
+        break;
+      case ENEMY_STATES.GROUND_POUND:
+        if (this.groundPoundPhase === 'up') {
+          pose = lerpPose(ENEMY_IDLE, ENEMY_ATTACK, Math.min(this.stateTimer / 200, 1));
+        } else {
+          pose = ENEMY_ATTACK;
+        }
         break;
       case ENEMY_STATES.HIT:
         pose = ENEMY_HIT;
@@ -560,7 +840,6 @@ export class Enemy {
         pose = ENEMY_HIT;
         break;
       default:
-        // Idle breathing
         const idleT = (this.stateTimer % 800) / 800;
         const breathe = Math.sin(idleT * Math.PI * 2) * 0.5 + 0.5;
         pose = lerpPose(ENEMY_IDLE, {
@@ -578,7 +857,7 @@ export class Enemy {
       this.x, drawY, pose,
       this.facingRight, this.type.color,
       this.type.bodyScale, this.type.headRadius,
-      alpha
+      alpha, this.type
     );
   }
 
@@ -600,7 +879,6 @@ export class Enemy {
         g.fillStyle(color, 0.6 * alpha);
         const cos = Math.cos(p.rot);
         const sin = Math.sin(p.rot);
-        // Draw rotated torso as a line with thickness
         g.lineStyle(p.w, color, alpha);
         g.lineBetween(
           p.x - sin * p.h / 2, p.y - cos * p.h / 2,
@@ -614,7 +892,6 @@ export class Enemy {
           p.x, p.y,
           p.x + sin * p.len, p.y + cos * p.len
         );
-        // Joint dot
         g.fillStyle(color, 0.7 * alpha);
         g.fillCircle(p.x, p.y, 2);
         g.fillCircle(p.x + sin * p.len, p.y + cos * p.len, 2.5);
@@ -625,17 +902,17 @@ export class Enemy {
   drawHealthBar() {
     this.hpGraphics.clear();
     if (!this.alive || this.health >= this.maxHealth) return;
+    // Boss health bars are drawn by HUD
+    if (this.type.isBoss) return;
 
     const barWidth = 30;
     const barHeight = 4;
     const x = this.x - barWidth / 2;
     const y = this.y - GAME_CONFIG.BODY_HEIGHT * this.type.bodyScale / 2 - 12;
 
-    // Background
     this.hpGraphics.fillStyle(0x333333, 0.8);
     this.hpGraphics.fillRect(x, y, barWidth, barHeight);
 
-    // Health
     const hpPercent = this.health / this.maxHealth;
     const color = hpPercent > 0.5 ? 0x44ff44 : hpPercent > 0.25 ? 0xffaa00 : 0xff3333;
     this.hpGraphics.fillStyle(color, 0.9);
@@ -648,7 +925,6 @@ export class Enemy {
 
     const g = this.webbedGraphics;
     g.lineStyle(1, 0xffffff, 0.5);
-    // Web strands wrapping the enemy
     for (let i = 0; i < 4; i++) {
       const y = this.y - 20 + i * 12;
       g.lineBetween(this.x - 15, y, this.x + 15, y + 3);

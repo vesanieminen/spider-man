@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_CONFIG } from '../config.js';
 import { SoundManager } from '../audio/SoundManager.js';
+import { InputManager, INPUT_CONFIGS } from '../input/InputManager.js';
 
 export class TitleScene extends Phaser.Scene {
   constructor() {
@@ -58,16 +59,16 @@ export class TitleScene extends Phaser.Scene {
       strokeThickness: 3,
     }).setOrigin(0.5).setDepth(20);
 
-    // Controls info
+    // Controls info - show both keyboard layouts
     const controls = [
-      'A/D - Move    W/Space - Jump',
-      'J - Punch    K - Kick',
-      'Hold L - Web Swing    Tap L - Web Shot',
-      'S+K (air) - Dive Kick',
+      'P1: WASD + JKL    P2: Arrows + Numpad 1/2/3',
+      'Move - Jump - Punch - Kick - Web',
+      'Hold Web - Web Swing    Tap Web - Web Shot',
+      'Down+Kick (air) - Dive Kick    Gamepad supported!',
     ];
     controls.forEach((line, i) => {
-      this.add.text(cx, 420 + i * 28, line, {
-        fontSize: '16px',
+      this.add.text(cx, 410 + i * 28, line, {
+        fontSize: '14px',
         fontFamily: 'monospace',
         color: '#aaaaaa',
         stroke: '#000',
@@ -75,8 +76,17 @@ export class TitleScene extends Phaser.Scene {
       }).setOrigin(0.5).setDepth(20);
     });
 
+    // Co-op text
+    this.add.text(cx, 540, '2-PLAYER CO-OP: Player 2 can join anytime!', {
+      fontSize: '16px',
+      fontFamily: 'monospace',
+      color: '#ffee00',
+      stroke: '#000',
+      strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(20);
+
     // Start prompt
-    this.startText = this.add.text(cx, 580, 'Press SPACE or ENTER to Start', {
+    this.startText = this.add.text(cx, 590, 'Press Any Key to Start', {
       fontSize: '24px',
       fontFamily: 'monospace',
       color: '#ffff00',
@@ -84,19 +94,15 @@ export class TitleScene extends Phaser.Scene {
       strokeThickness: 3,
     }).setOrigin(0.5).setDepth(20);
 
-    // Input
-    this.input.keyboard.on('keydown-SPACE', () => this.startGame());
-    this.input.keyboard.on('keydown-ENTER', () => this.startGame());
-
-    // Gamepad
-    if (this.input.gamepad) {
-      this.input.gamepad.on('down', () => this.startGame());
-    }
+    this.started = false;
+    this.startDelay = 300; // Brief delay to avoid phantom inputs
   }
 
-  startGame() {
+  startGame(inputConfig) {
+    if (this.started) return;
+    this.started = true;
     SoundManager.menuSelect();
-    this.scene.start('GameScene');
+    this.scene.start('GameScene', { inputConfig });
   }
 
   update(time, delta) {
@@ -132,7 +138,7 @@ export class TitleScene extends Phaser.Scene {
     g.lineStyle(4, bodyColor, 1);
     g.lineBetween(px, py - 38, px, py - 4);
 
-    // Arms (one reaching up to web)
+    // Arms
     g.lineStyle(3, bodyColor, 1);
     const armAngle = this.swingAngle * 0.5;
     g.lineBetween(px, py - 34, px + Math.sin(armAngle + 0.5) * 20, py - 50);
@@ -146,5 +152,14 @@ export class TitleScene extends Phaser.Scene {
 
     // Blink start text
     this.startText.setAlpha(0.5 + Math.sin(time / 300) * 0.5);
+
+    // Poll all input configs for any press
+    this.startDelay -= delta;
+    if (this.startDelay <= 0 && !this.started) {
+      const config = InputManager.detectAnyPress(this, []);
+      if (config) {
+        this.startGame(config);
+      }
+    }
   }
 }

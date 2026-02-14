@@ -1,15 +1,17 @@
 import Phaser from 'phaser';
-import { GAME_CONFIG, PLAYER_STATES } from '../config.js';
+import { GAME_CONFIG, PLAYER_STATES, PLAYER_CHARACTERS } from '../config.js';
 import { PlayerRenderer } from './PlayerRenderer.js';
 import { WebPhysics } from './WebPhysics.js';
 import { POSES, lerpPose } from './PlayerAnimations.js';
 import { SoundManager } from '../audio/SoundManager.js';
 
 export class Player {
-  constructor(scene, x, y) {
+  constructor(scene, x, y, characterConfig, playerIndex = 0) {
     this.scene = scene;
     this.x = x;
     this.y = y;
+    this.characterConfig = characterConfig || PLAYER_CHARACTERS.PETER;
+    this.playerIndex = playerIndex;
     this.health = GAME_CONFIG.PLAYER_HP;
     this.maxHealth = GAME_CONFIG.PLAYER_MAX_HP;
     this.facingRight = true;
@@ -26,7 +28,7 @@ export class Player {
 
     // Graphics for drawing
     this.graphics = scene.add.graphics().setDepth(20);
-    this.renderer = new PlayerRenderer(this.graphics);
+    this.renderer = new PlayerRenderer(this.graphics, this.characterConfig);
 
     // Web system
     this.web = new WebPhysics();

@@ -4,7 +4,7 @@ export const GAME_CONFIG = {
   HEIGHT: 720,
 
   // Level
-  LEVEL_WIDTH: 8000,
+  LEVEL_WIDTH: 9000,
   GROUND_Y: 620,
   CEILING_Y: 40,
 
@@ -80,6 +80,22 @@ export const GAME_CONFIG = {
   SCORE_WEB_FINISHER: 25,
 };
 
+export const PLAYER_CHARACTERS = {
+  PETER: {
+    name: 'PETER',
+    bodyColor: 0x3366FF,
+    accentColor: 0xEE2222,
+    style: 'webPattern',
+  },
+  MILES: {
+    name: 'MILES',
+    bodyColor: 0x111111,
+    accentColor: 0xFF2244,
+    electricColor: 0xFFEE00,
+    style: 'electric',
+  },
+};
+
 export const PLAYER_STATES = {
   IDLE: 'IDLE',
   RUN: 'RUN',
@@ -107,4 +123,10 @@ export const ENEMY_STATES = {
   THROW: 'THROW',
   DODGE: 'DODGE',
   FLEE: 'FLEE',
+  GRAB: 'GRAB',
+  LEAP: 'LEAP',
+  TAIL_SWEEP: 'TAIL_SWEEP',
+  FLYING: 'FLYING',
+  SWOOP: 'SWOOP',
+  TENDRIL: 'TENDRIL',
 };

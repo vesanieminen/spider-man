@@ -193,5 +193,90 @@ export function spawnDiveKickShockwave(scene, x, y) {
   scene.tweens.add({ targets: flash, alpha: 0, duration: 100, onComplete: () => flash.destroy() });
 }
 
+export function spawnVenomStrikeEffect(scene, x, y) {
+  // Yellow electric sparks (for Miles' hits on Venom)
+  const g = scene.add.graphics().setDepth(26);
+  const sparks = [];
+  for (let i = 0; i < 12; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 80 + Math.random() * 180;
+    sparks.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 30,
+      len: 4 + Math.random() * 8,
+    });
+  }
+  scene.tweens.addCounter({
+    from: 0, to: 1, duration: 350,
+    onUpdate: (tween) => {
+      g.clear();
+      const t = tween.getValue();
+      sparks.forEach(s => {
+        s.x += s.vx * 0.016;
+        s.y += s.vy * 0.016;
+        const angle = Math.atan2(s.vy, s.vx);
+        g.lineStyle(2, 0xffee00, 1 - t);
+        g.lineBetween(s.x, s.y, s.x - Math.cos(angle) * s.len, s.y - Math.sin(angle) * s.len);
+        g.fillStyle(0xffffff, (1 - t) * 0.8);
+        g.fillCircle(s.x, s.y, 1.5);
+      });
+    },
+    onComplete: () => g.destroy()
+  });
+}
+
+export function spawnGrabEffect(scene, x, y) {
+  // Tendrils wrapping visual
+  const g = scene.add.graphics().setDepth(22);
+  scene.tweens.addCounter({
+    from: 0, to: 1, duration: 500,
+    onUpdate: (tween) => {
+      g.clear();
+      const t = tween.getValue();
+      g.lineStyle(2, 0x444444, (1 - t) * 0.7);
+      for (let i = 0; i < 6; i++) {
+        const angle = (i / 6) * Math.PI * 2 + t * 2;
+        const r = 15 + t * 5;
+        g.lineBetween(
+          x + Math.cos(angle) * r, y + Math.sin(angle) * r,
+          x + Math.cos(angle + 0.5) * (r + 8), y + Math.sin(angle + 0.5) * (r + 8)
+        );
+      }
+    },
+    onComplete: () => g.destroy()
+  });
+}
+
+export function spawnGroundPoundWave(scene, x, y, range = 120) {
+  // Expanding ring shockwave (for Rhino)
+  spawnShockwave(scene, x, y, 0x888888, range);
+  spawnDustPuff(scene, x - 30, y, 0x666666);
+  spawnDustPuff(scene, x + 30, y, 0x666666);
+  spawnDustPuff(scene, x, y, 0x888888);
+}
+
+export function spawnBossEntryText(scene, name) {
+  const cx = GAME_WIDTH / 2;
+  const cy = GAME_HEIGHT / 2 - 50;
+  const txt = scene.add.text(cx, cy, name.toUpperCase(), {
+    fontSize: '48px',
+    fontFamily: 'monospace',
+    color: '#ff3333',
+    fontStyle: 'bold',
+    stroke: '#000',
+    strokeThickness: 6,
+  }).setScrollFactor(0).setDepth(60).setOrigin(0.5).setAlpha(0);
+
+  scene.tweens.add({
+    targets: txt,
+    alpha: 1,
+    duration: 300,
+    yoyo: true,
+    hold: 1200,
+    onComplete: () => txt.destroy(),
+  });
+}
+
 const GAME_WIDTH = 1280;
 const GAME_HEIGHT = 720;
