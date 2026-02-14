@@ -452,6 +452,7 @@ export class Player {
           damage: GAME_CONFIG.PUNCH_DAMAGE,
           range: GAME_CONFIG.PUNCH_RANGE,
           knockback: GAME_CONFIG.PUNCH_KNOCKBACK,
+          launch: GAME_CONFIG.PUNCH_LAUNCH,
           type: 'punch',
         };
       case PLAYER_STATES.KICK:
@@ -459,22 +460,25 @@ export class Player {
           damage: GAME_CONFIG.KICK_DAMAGE,
           range: GAME_CONFIG.KICK_RANGE,
           knockback: GAME_CONFIG.KICK_KNOCKBACK,
+          launch: GAME_CONFIG.KICK_LAUNCH,
           type: 'kick',
         };
       case PLAYER_STATES.DIVE_KICK:
         return {
           damage: GAME_CONFIG.DIVE_KICK_DAMAGE,
-          range: 50,
+          range: 80,
           knockback: GAME_CONFIG.DIVE_KICK_KNOCKBACK,
+          launch: GAME_CONFIG.DIVE_KICK_LAUNCH,
           type: 'diveKick',
         };
       case PLAYER_STATES.SWING_KICK:
         // More speed = more damage
-        const bonusDamage = Math.floor(speed / 50);
+        const bonusDamage = Math.floor(speed / 30);
         return {
           damage: GAME_CONFIG.SWING_KICK_BASE_DAMAGE + bonusDamage,
-          range: 60,
+          range: 90,
           knockback: GAME_CONFIG.SWING_KICK_KNOCKBACK,
+          launch: GAME_CONFIG.SWING_KICK_LAUNCH,
           type: 'swingKick',
         };
       case PLAYER_STATES.WEB_SHOT:
@@ -482,6 +486,7 @@ export class Player {
           damage: GAME_CONFIG.WEB_SHOT_DAMAGE,
           range: GAME_CONFIG.WEB_SHOT_RANGE,
           knockback: 0,
+          launch: 0,
           type: 'webShot',
           stun: GAME_CONFIG.WEB_SHOT_STUN,
         };

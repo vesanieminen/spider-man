@@ -95,7 +95,7 @@ export class Enemy {
     const bh = GAME_CONFIG.BODY_HEIGHT * type.bodyScale;
     this.body.setSize(bw, bh);
     this.body.setCollideWorldBounds(false);
-    this.body.setMaxVelocity(400, 1000);
+    this.body.setMaxVelocity(1500, 1500);
 
     // Graphics
     this.graphics = scene.add.graphics().setDepth(15);
@@ -273,7 +273,10 @@ export class Enemy {
         break;
 
       case ENEMY_STATES.DEAD:
-        this.body.body.setVelocityX(0);
+        // Ragdoll: let physics carry the body, apply gravity and drag
+        if (this.ragdoll) {
+          this.updateRagdoll(delta);
+        }
         break;
     }
   }

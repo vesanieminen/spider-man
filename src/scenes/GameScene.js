@@ -90,13 +90,13 @@ export class GameScene extends Phaser.Scene {
       if (this.player.isGrounded) {
         spawnDiveKickShockwave(this, this.player.x, GAME_CONFIG.GROUND_Y);
         this.screenEffects.shakeHeavy();
-        // Damage nearby enemies
+        // Damage nearby enemies - massive shockwave launches them
         this.enemies.forEach(enemy => {
           if (!enemy.alive) return;
           const dist = Math.abs(enemy.x - this.player.x);
-          if (dist < 100) {
+          if (dist < 180) {
             const dir = enemy.x > this.player.x ? 1 : -1;
-            const killed = enemy.takeDamage(GAME_CONFIG.DIVE_KICK_DAMAGE, dir * GAME_CONFIG.DIVE_KICK_KNOCKBACK, -250);
+            const killed = enemy.takeDamage(GAME_CONFIG.DIVE_KICK_DAMAGE, dir * GAME_CONFIG.DIVE_KICK_KNOCKBACK, GAME_CONFIG.DIVE_KICK_LAUNCH);
             if (killed !== false) {
               this.onEnemyHit(enemy, 'diveKick');
             }
@@ -196,9 +196,10 @@ export class GameScene extends Phaser.Scene {
     const attackData = this.player.getAttackData();
     if (!attackData) return;
 
+    // Spider-man cleaves through ALL enemies in range
+    let hitAny = false;
     this.enemies.forEach(enemy => {
       if (!enemy.alive) return;
-      if (this.player.hasHit && attackData.type !== 'diveKick' && attackData.type !== 'swingKick') return;
 
       const hurtbox = enemy.getHurtboxRect();
       if (!Phaser.Geom.Rectangle.Overlaps(hitbox, hurtbox)) return;
@@ -210,24 +211,27 @@ export class GameScene extends Phaser.Scene {
       const dir = this.player.facingRight ? 1 : -1;
 
       if (attackData.type === 'webShot') {
-        // Web shot stuns
+        // Web shot stuns ALL enemies in line
         enemy.stun(attackData.stun);
         spawnWebHitEffect(this, enemy.x, enemy.y - 20);
         this.onEnemyHit(enemy, 'webShot');
-        this.player.hasHit = true;
+        hitAny = true;
         return;
       }
 
-      const killed = enemy.takeDamage(damage, dir * attackData.knockback);
+      const launchY = attackData.launch || -150;
+      const killed = enemy.takeDamage(damage, dir * attackData.knockback, launchY);
       if (killed === false) return; // Dodged
 
-      this.player.hasHit = true;
+      hitAny = true;
       this.onEnemyHit(enemy, attackData.type);
 
       if (!enemy.alive) {
         this.onEnemyKilled(enemy, attackData.type);
       }
     });
+
+    if (hitAny) this.player.hasHit = true;
   }
 
   onEnemyHit(enemy, attackType) {
@@ -240,34 +244,44 @@ export class GameScene extends Phaser.Scene {
     const hitX = (this.player.x + enemy.x) / 2;
     const hitY = (this.player.y + enemy.y) / 2;
 
+    const dir = this.player.facingRight ? 1 : -1;
     switch (attackType) {
       case 'punch':
-        spawnHitSparks(this, hitX, hitY, 0xffff00, 6);
-        this.screenEffects.shakeLight();
+        spawnHitSparks(this, hitX, hitY, 0xffff00, 12);
+        spawnSpeedLines(this, hitX, hitY, dir, 0xffff00, 4);
+        this.screenEffects.shakeMedium();
+        this.screenEffects.flash(0xffffff, 0.1, 60);
         this.player.applyHitstop(GAME_CONFIG.HITSTOP_LIGHT);
         enemy.applyHitstop(GAME_CONFIG.HITSTOP_LIGHT);
-        SoundManager.enemyHit();
+        SoundManager.heavyHit();
         break;
       case 'kick':
-        spawnHitSparks(this, hitX, hitY, 0xff8800, 8);
-        this.screenEffects.shakeMedium();
+        spawnHitSparks(this, hitX, hitY, 0xff8800, 16);
+        spawnSpeedLines(this, hitX, hitY, dir, 0xff8800, 6);
+        spawnShockwave(this, hitX, hitY, 0xff8800, 50);
+        this.screenEffects.shakeHeavy();
+        this.screenEffects.flash(0xffffff, 0.15, 80);
         this.player.applyHitstop(GAME_CONFIG.HITSTOP_MEDIUM);
         enemy.applyHitstop(GAME_CONFIG.HITSTOP_MEDIUM);
         SoundManager.heavyHit();
         break;
       case 'diveKick':
-        spawnHitSparks(this, hitX, hitY, 0xff4400, 12);
+        spawnHitSparks(this, hitX, hitY, 0xff4400, 20);
+        spawnShockwave(this, hitX, hitY, 0xff4400, 80);
         this.screenEffects.shakeHeavy();
+        this.screenEffects.flash(0xff4400, 0.2, 100);
         this.player.applyHitstop(GAME_CONFIG.HITSTOP_HEAVY);
         enemy.applyHitstop(GAME_CONFIG.HITSTOP_HEAVY);
         SoundManager.heavyHit();
         break;
       case 'swingKick':
-        spawnHitSparks(this, hitX, hitY, 0x44aaff, 10);
-        spawnSpeedLines(this, hitX, hitY, this.player.facingRight ? 1 : -1, 0x44aaff, 6);
-        this.screenEffects.shakeMedium();
-        this.player.applyHitstop(GAME_CONFIG.HITSTOP_MEDIUM);
-        enemy.applyHitstop(GAME_CONFIG.HITSTOP_MEDIUM);
+        spawnHitSparks(this, hitX, hitY, 0x44aaff, 18);
+        spawnSpeedLines(this, hitX, hitY, dir, 0x44aaff, 8);
+        spawnShockwave(this, hitX, hitY, 0x44aaff, 70);
+        this.screenEffects.shakeHeavy();
+        this.screenEffects.flash(0x44aaff, 0.15, 80);
+        this.player.applyHitstop(GAME_CONFIG.HITSTOP_HEAVY);
+        enemy.applyHitstop(GAME_CONFIG.HITSTOP_HEAVY);
         SoundManager.heavyHit();
         // Style bonus
         this.score += GAME_CONFIG.SCORE_SWING_SMASH;
