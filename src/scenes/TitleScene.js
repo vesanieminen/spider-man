@@ -61,10 +61,11 @@ export class TitleScene extends Phaser.Scene {
 
     // Controls info - show both keyboard layouts
     const controls = [
-      'P1: WASD + JKL    P2: Arrows + Numpad 1/2/3',
-      'Move - Jump - Punch - Kick - Web',
-      'Hold Web - Web Swing    Tap Web - Web Shot',
-      'Down+Kick (air) - Dive Kick    Gamepad supported!',
+      'P1: WASD + JKLI    P2: Arrows + Numpad 1-4',
+      'Move - Jump - Punch - Kick - Web Swing - Web Shoot',
+      'I - Web Shot    Down+I - Web Pull (yank enemy!)',
+      'Hold L - Web Swing    Down+K (air) - Dive Kick',
+      'Gamepad: Bumpers = Web Shoot    Supported!',
     ];
     controls.forEach((line, i) => {
       this.add.text(cx, 410 + i * 28, line, {

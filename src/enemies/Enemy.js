@@ -369,7 +369,9 @@ export class Enemy {
         break;
 
       case ENEMY_STATES.STUNNED:
-        this.body.body.setVelocityX(0);
+        if (!this.beingPulled) {
+          this.body.body.setVelocityX(0);
+        }
         break;
 
       case ENEMY_STATES.DEAD:

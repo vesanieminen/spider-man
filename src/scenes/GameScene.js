@@ -127,6 +127,9 @@ export class GameScene extends Phaser.Scene {
 
       // Dive kick landing detection (per player)
       this.handleDiveKickLanding(slot);
+
+      // Web pull: move enemy toward player
+      this.handleWebPull(slot.player, delta);
     }
 
     // Spawn enemies based on camera position
@@ -292,6 +295,39 @@ export class GameScene extends Phaser.Scene {
     slot.lastDiveKickState = player.state === PLAYER_STATES.DIVE_KICK;
   }
 
+  handleWebPull(player, delta) {
+    if (player.state !== PLAYER_STATES.WEB_PULL || !player.pullTarget) return;
+
+    const enemy = player.pullTarget;
+    if (!enemy.alive) {
+      enemy.beingPulled = false;
+      player.pullTarget = null;
+      return;
+    }
+
+    // Move enemy toward player
+    const dx = player.x - enemy.x;
+    const dist = Math.abs(dx);
+    const dir = Math.sign(dx);
+
+    if (dist > 50) {
+      // Pull enemy toward player
+      enemy.beingPulled = true;
+      const pullSpeed = GAME_CONFIG.WEB_PULL_SPEED;
+      enemy.body.body.setVelocityX(dir * pullSpeed);
+    } else {
+      // Enemy arrived - stun them in place
+      enemy.beingPulled = false;
+      enemy.body.body.setVelocityX(0);
+      enemy.stun(GAME_CONFIG.WEB_PULL_STUN);
+      player.pullTarget = null;
+
+      // Style bonus
+      spawnStyleBonus(this, enemy.x, enemy.y - 40, 'WEB YANK!');
+      this.score += 20;
+    }
+  }
+
   getNearestPlayer(x, y, enemy) {
     const activePlayers = this.players.filter(p => p.active && p.player.health > 0);
     if (activePlayers.length === 0) return { x: 0, y: 0 };
@@ -397,6 +433,16 @@ export class GameScene extends Phaser.Scene {
         return;
       }
 
+      if (attackData.type === 'webPull') {
+        // Attach web to enemy and start pulling them toward player
+        player.pullTarget = enemy;
+        enemy.stun(attackData.stun + GAME_CONFIG.WEB_PULL_DURATION);
+        spawnWebHitEffect(this, enemy.x, enemy.y - 20);
+        SoundManager.webShoot();
+        hitAny = true;
+        return;
+      }
+
       const launchY = attackData.launch || -150;
       const killed = enemy.takeDamage(damage, dir * attackData.knockback, launchY);
       if (killed === false) return;
@@ -464,6 +510,8 @@ export class GameScene extends Phaser.Scene {
         SoundManager.styleBonus();
         break;
       case 'webShot':
+        break;
+      case 'webPull':
         break;
     }
 

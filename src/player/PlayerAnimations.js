@@ -201,6 +201,29 @@ const WEB_SHOT = [
   },
 ];
 
+const WEB_PULL = [
+  // Arm extended - web attached
+  {
+    head: { x: 2, y: -50 }, neck: { x: 2, y: -38 },
+    shoulderL: { x: -10, y: -36 }, shoulderR: { x: 14, y: -36 },
+    elbowL: { x: -18, y: -24 }, elbowR: { x: 30, y: -36 },
+    handL: { x: -14, y: -12 }, handR: { x: 42, y: -36 },
+    hip: { x: 0, y: -4 },
+    kneeL: { x: -10, y: 14 }, kneeR: { x: 8, y: 14 },
+    footL: { x: -14, y: 30 }, footR: { x: 10, y: 30 },
+  },
+  // Pulling back - braced stance
+  {
+    head: { x: -2, y: -50 }, neck: { x: -1, y: -38 },
+    shoulderL: { x: -12, y: -36 }, shoulderR: { x: 12, y: -36 },
+    elbowL: { x: -20, y: -24 }, elbowR: { x: 8, y: -30 },
+    handL: { x: -16, y: -14 }, handR: { x: 4, y: -24 },
+    hip: { x: -2, y: -2 },
+    kneeL: { x: -12, y: 14 }, kneeR: { x: 6, y: 14 },
+    footL: { x: -16, y: 30 }, footR: { x: 12, y: 30 },
+  },
+];
+
 const HIT = [
   {
     head: { x: -6, y: -48 }, neck: { x: -4, y: -36 },
@@ -227,7 +250,7 @@ const LAND = [
 
 export const POSES = {
   IDLE, RUN, JUMP, FALL, SWING, PUNCH, KICK,
-  DIVE_KICK, SWING_KICK, WEB_SHOT, HIT, LAND,
+  DIVE_KICK, SWING_KICK, WEB_SHOT, WEB_PULL, HIT, LAND,
 };
 
 export function lerpPose(a, b, t) {

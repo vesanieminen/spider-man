@@ -47,6 +47,10 @@ export class Player {
 
     // Dive kick state
     this.diveKickActive = false;
+
+    // Web pull state
+    this.pullTarget = null;
+    this.pullTimer = 0;
   }
 
   update(delta, actions) {
@@ -110,10 +114,13 @@ export class Player {
       case PLAYER_STATES.PUNCH:
       case PLAYER_STATES.KICK:
       case PLAYER_STATES.WEB_SHOT:
-        this.handleAttackState(delta, actions);
+        this.handleAttackState(delta);
         break;
       case PLAYER_STATES.DIVE_KICK:
         this.handleDiveKickState(delta, actions);
+        break;
+      case PLAYER_STATES.WEB_PULL:
+        this.handleWebPullState(delta, actions);
         break;
       case PLAYER_STATES.SWING_KICK:
         this.handleSwingKickState(delta, actions);
@@ -169,8 +176,19 @@ export class Player {
       return;
     }
 
-    // Web shot (tap)
-    if (actions.webTap && this.attackCooldown <= 0) {
+    // Web pull (down + web shoot key)
+    if (actions.down && actions.webShoot && this.attackCooldown <= 0) {
+      this.enterState(PLAYER_STATES.WEB_PULL);
+      this.hasHit = false;
+      this.pullTarget = null;
+      this.pullTimer = 0;
+      this.attackCooldown = 400;
+      SoundManager.webShoot();
+      return;
+    }
+
+    // Web shot (web shoot key)
+    if (actions.webShoot && this.attackCooldown <= 0) {
       this.enterState(PLAYER_STATES.WEB_SHOT);
       this.hasHit = false;
       this.attackCooldown = 300;
@@ -220,8 +238,19 @@ export class Player {
       return;
     }
 
-    // Web shot
-    if (actions.webTap && this.attackCooldown <= 0) {
+    // Web pull (down + web shoot key) in air
+    if (actions.down && actions.webShoot && this.attackCooldown <= 0) {
+      this.enterState(PLAYER_STATES.WEB_PULL);
+      this.hasHit = false;
+      this.pullTarget = null;
+      this.pullTimer = 0;
+      this.attackCooldown = 400;
+      SoundManager.webShoot();
+      return;
+    }
+
+    // Web shot (web shoot key)
+    if (actions.webShoot && this.attackCooldown <= 0) {
       this.enterState(PLAYER_STATES.WEB_SHOT);
       this.hasHit = false;
       this.attackCooldown = 300;
@@ -371,6 +400,47 @@ export class Player {
     }
   }
 
+  releasePullTarget() {
+    if (this.pullTarget) {
+      this.pullTarget.beingPulled = false;
+      this.pullTarget = null;
+    }
+  }
+
+  handleWebPullState(delta, actions) {
+    this.pullTimer += delta;
+
+    // Allow canceling into punch/kick for follow-up combo
+    if (this.pullTimer > 200 && this.attackCooldown <= 0) {
+      if (actions.punch) {
+        this.releasePullTarget();
+        this.enterState(PLAYER_STATES.PUNCH);
+        this.hasHit = false;
+        this.attackCooldown = 100;
+        SoundManager.punch();
+        return;
+      }
+      if (actions.kick) {
+        this.releasePullTarget();
+        this.enterState(PLAYER_STATES.KICK);
+        this.hasHit = false;
+        this.attackCooldown = 150;
+        SoundManager.kick();
+        return;
+      }
+    }
+
+    // End pull after duration
+    if (this.pullTimer >= GAME_CONFIG.WEB_PULL_DURATION) {
+      this.releasePullTarget();
+      if (this.isGrounded) {
+        this.enterState(PLAYER_STATES.IDLE);
+      } else {
+        this.enterState(PLAYER_STATES.FALL);
+      }
+    }
+  }
+
   handleHitState(delta) {
     if (this.stateTimer > 300) {
       if (this.isGrounded) {
@@ -409,6 +479,7 @@ export class Player {
       PLAYER_STATES.DIVE_KICK,
       PLAYER_STATES.SWING_KICK,
       PLAYER_STATES.WEB_SHOT,
+      PLAYER_STATES.WEB_PULL,
     ].includes(this.state);
   }
 
@@ -434,6 +505,10 @@ export class Player {
       case PLAYER_STATES.WEB_SHOT:
         activeStart = 50;
         activeEnd = 150;
+        break;
+      case PLAYER_STATES.WEB_PULL:
+        activeStart = 50;
+        activeEnd = 200;
         break;
       default:
         return false;
@@ -492,6 +567,15 @@ export class Player {
           type: 'webShot',
           stun: GAME_CONFIG.WEB_SHOT_STUN,
         };
+      case PLAYER_STATES.WEB_PULL:
+        return {
+          damage: 0,
+          range: GAME_CONFIG.WEB_PULL_RANGE,
+          knockback: 0,
+          launch: 0,
+          type: 'webPull',
+          stun: GAME_CONFIG.WEB_PULL_STUN,
+        };
       default:
         return null;
     }
@@ -503,7 +587,7 @@ export class Player {
 
     const dir = this.facingRight ? 1 : -1;
 
-    if (attack.type === 'webShot') {
+    if (attack.type === 'webShot' || attack.type === 'webPull') {
       // Long horizontal beam
       const hbX = this.facingRight ? this.x : this.x - attack.range;
       return new Phaser.Geom.Rectangle(hbX, this.y - 10, attack.range, 20);
@@ -562,6 +646,9 @@ export class Player {
     if (this.web.active) {
       this.web.release();
     }
+
+    // Release web pull target
+    this.releasePullTarget();
   }
 
   applyHitstop(ms) {
@@ -584,6 +671,7 @@ export class Player {
         case PLAYER_STATES.RUN: totalDuration = 400; looping = true; break;
         case PLAYER_STATES.PUNCH: totalDuration = GAME_CONFIG.PUNCH_DURATION; break;
         case PLAYER_STATES.KICK: totalDuration = GAME_CONFIG.KICK_DURATION; break;
+        case PLAYER_STATES.WEB_PULL: totalDuration = GAME_CONFIG.WEB_PULL_DURATION; break;
         case PLAYER_STATES.HIT: totalDuration = 300; break;
         default: totalDuration = 400; break;
       }
@@ -620,11 +708,58 @@ export class Player {
 
   drawWeb() {
     this.webGraphics.clear();
-    if (!this.web.active) return;
 
     const g = this.webGraphics;
 
-    // Web line from hand to anchor
+    // Draw web pull line to target
+    if (this.state === PLAYER_STATES.WEB_PULL && this.pullTarget) {
+      const target = this.pullTarget;
+      const tx = target.x || target.body?.x || 0;
+      const ty = (target.y || target.body?.y || 0) - 20;
+
+      // Main web line
+      g.lineStyle(3, 0xffffff, 0.9);
+      g.lineBetween(this.x, this.y - 20, tx, ty);
+
+      // Secondary strands
+      g.lineStyle(1, 0xcccccc, 0.5);
+      g.lineBetween(this.x + 2, this.y - 18, tx + 3, ty + 3);
+      g.lineBetween(this.x - 2, this.y - 22, tx - 3, ty - 3);
+
+      // Web splat on target
+      g.fillStyle(0xffffff, 0.7);
+      g.fillCircle(tx, ty, 5);
+      for (let i = 0; i < 4; i++) {
+        const angle = (i / 4) * Math.PI * 2;
+        const len = 6 + Math.random() * 4;
+        g.lineStyle(1, 0xffffff, 0.5);
+        g.lineBetween(tx, ty, tx + Math.cos(angle) * len, ty + Math.sin(angle) * len);
+      }
+    }
+
+    // Draw web projectile during web shot
+    if (this.state === PLAYER_STATES.WEB_SHOT && this.stateTimer >= 30 && this.stateTimer <= 180) {
+      const dir = this.facingRight ? 1 : -1;
+      const progress = (this.stateTimer - 30) / 150;
+      const projX = this.x + dir * progress * GAME_CONFIG.WEB_SHOT_RANGE;
+      const projY = this.y - 20;
+
+      // Web glob
+      g.fillStyle(0xffffff, 0.9 - progress * 0.3);
+      g.fillCircle(projX, projY, 4);
+
+      // Trailing web lines
+      g.lineStyle(2, 0xffffff, 0.7 - progress * 0.3);
+      g.lineBetween(this.x, this.y - 20, projX, projY);
+
+      // Thin trailing strands
+      g.lineStyle(1, 0xcccccc, 0.4);
+      g.lineBetween(this.x + 2, this.y - 18, projX + 2, projY + 2);
+    }
+
+    if (!this.web.active) return;
+
+    // Web line from hand to anchor (swing)
     g.lineStyle(2, 0xffffff, 0.8);
     g.lineBetween(this.x, this.y - 20, this.web.anchorX, this.web.anchorY);
 

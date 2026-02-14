@@ -13,6 +13,7 @@ export const INPUT_CONFIGS = {
       punch: Phaser.Input.Keyboard.KeyCodes.J,
       kick: Phaser.Input.Keyboard.KeyCodes.K,
       web: Phaser.Input.Keyboard.KeyCodes.L,
+      webShoot: Phaser.Input.Keyboard.KeyCodes.I,
     },
   },
   KEYBOARD_2: {
@@ -27,6 +28,7 @@ export const INPUT_CONFIGS = {
       punch: Phaser.Input.Keyboard.KeyCodes.NUMPAD_ONE,
       kick: Phaser.Input.Keyboard.KeyCodes.NUMPAD_TWO,
       web: Phaser.Input.Keyboard.KeyCodes.NUMPAD_THREE,
+      webShoot: Phaser.Input.Keyboard.KeyCodes.NUMPAD_FOUR,
     },
   },
   GAMEPAD_0: {
@@ -60,24 +62,12 @@ export class InputManager {
       punch: false,
       kick: false,
       web: false,
+      webShoot: false,
     };
-
-    this.webHoldTime = 0;
-    this.webWasDown = false;
   }
 
   getActions(delta) {
     const raw = this.config.type === 'keyboard' ? this.readKeyboard() : this.readGamepad();
-
-    if (raw.web) {
-      this.webHoldTime += delta;
-    } else {
-      this.webHoldTime = 0;
-    }
-
-    const webJustPressed = raw.web && !this.prevState.web;
-    const webJustReleased = !raw.web && this.prevState.web;
-    const webIsHeld = raw.web && this.webHoldTime > 100;
 
     const actions = {
       left: raw.left,
@@ -86,10 +76,10 @@ export class InputManager {
       down: raw.down,
       punch: raw.punch && !this.prevState.punch,
       kick: raw.kick && !this.prevState.kick,
-      webTap: webJustReleased && this.webHoldTime < 150 && this.webWasDown,
-      webHoldStart: webJustPressed,
-      webHold: webIsHeld,
-      webRelease: webJustReleased && this.webHoldTime >= 150,
+      webShoot: raw.webShoot && !this.prevState.webShoot,
+      webHoldStart: raw.web && !this.prevState.web,
+      webHold: raw.web,
+      webRelease: !raw.web && this.prevState.web,
     };
 
     this.prevState = {
@@ -97,8 +87,8 @@ export class InputManager {
       punch: raw.punch,
       kick: raw.kick,
       web: raw.web,
+      webShoot: raw.webShoot,
     };
-    this.webWasDown = raw.web;
 
     return actions;
   }
@@ -112,11 +102,12 @@ export class InputManager {
       punch: this.keys.punch && this.keys.punch.isDown,
       kick: this.keys.kick && this.keys.kick.isDown,
       web: this.keys.web && this.keys.web.isDown,
+      webShoot: this.keys.webShoot && this.keys.webShoot.isDown,
     };
   }
 
   readGamepad() {
-    const none = { left: false, right: false, jump: false, down: false, punch: false, kick: false, web: false };
+    const none = { left: false, right: false, jump: false, down: false, punch: false, kick: false, web: false, webShoot: false };
     const pads = this.scene.input.gamepad;
     if (!pads) return none;
     const pad = pads.getPad(this.config.padIndex);
@@ -136,6 +127,7 @@ export class InputManager {
       punch: btn(2),
       kick: btn(3),
       web: btn(1) || trigger(7),
+      webShoot: btn(4) || btn(5), // Bumpers for web shoot
     };
   }
 
