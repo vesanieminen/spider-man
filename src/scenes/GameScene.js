@@ -131,6 +131,9 @@ export class GameScene extends Phaser.Scene {
         if (bombData) {
           this.handleBombExplosion(bombData);
         }
+      } else {
+        // Update dead enemies for ragdoll animation
+        enemy.update(delta, 0, 0);
       }
     });
 
@@ -390,7 +393,7 @@ export class GameScene extends Phaser.Scene {
 
   cleanupDeadEnemies() {
     this.enemies = this.enemies.filter(enemy => {
-      if (!enemy.alive && enemy.stateTimer > 1000) {
+      if (!enemy.alive && enemy.stateTimer > 3000) {
         enemy.destroy();
         return false;
       }

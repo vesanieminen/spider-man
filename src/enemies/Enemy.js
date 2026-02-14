@@ -127,7 +127,15 @@ export class Enemy {
   }
 
   update(delta, playerX, playerY) {
-    if (!this.alive) return;
+    // Dead enemies only update ragdoll
+    if (!this.alive) {
+      this.stateTimer += delta;
+      if (this.ragdoll) {
+        this.updateRagdoll(delta);
+        this.drawRagdoll();
+      }
+      return;
+    }
 
     // Hitstop
     if (this.hitstopTimer > 0) {
@@ -442,6 +450,7 @@ export class Enemy {
     if (this.health <= 0) {
       this.health = 0;
       this.alive = false;
+      this.createRagdoll(knockbackX, knockbackY);
       this.enterState(ENEMY_STATES.DEAD);
       return true;
     }
@@ -459,6 +468,64 @@ export class Enemy {
 
   applyHitstop(ms) {
     this.hitstopTimer = ms;
+  }
+
+  createRagdoll(knockbackX, knockbackY) {
+    // Create ragdoll body parts that fly independently
+    const s = this.type.bodyScale;
+    const parts = [
+      { name: 'head', ox: 0, oy: -50 * s, size: GAME_CONFIG.HEAD_RADIUS * this.type.headRadius, shape: 'circle' },
+      { name: 'torso', ox: 0, oy: -20 * s, size: 6 * s, shape: 'rect', w: 6 * s, h: 30 * s },
+      { name: 'armL', ox: -15 * s, oy: -30 * s, size: 4 * s, shape: 'line', len: 22 * s },
+      { name: 'armR', ox: 15 * s, oy: -30 * s, size: 4 * s, shape: 'line', len: 22 * s },
+      { name: 'legL', ox: -8 * s, oy: 5 * s, size: 4 * s, shape: 'line', len: 28 * s },
+      { name: 'legR', ox: 8 * s, oy: 5 * s, size: 4 * s, shape: 'line', len: 28 * s },
+    ];
+
+    this.ragdoll = parts.map(p => {
+      const spread = 0.6;
+      return {
+        ...p,
+        x: this.x + p.ox,
+        y: this.y + p.oy,
+        vx: knockbackX * (0.6 + Math.random() * 0.8) + (Math.random() - 0.5) * 200 * spread,
+        vy: knockbackY * (0.5 + Math.random() * 1.0) + (Math.random() - 0.5) * 150 * spread,
+        rot: (Math.random() - 0.5) * 2,
+        rotSpeed: (Math.random() - 0.5) * 15,
+        bounced: false,
+      };
+    });
+
+    // Hide the physics body and clean up UI
+    this.body.body.setVelocity(0, 0);
+    this.body.body.setAllowGravity(false);
+    this.hpGraphics.clear();
+    this.webbedGraphics.clear();
+  }
+
+  updateRagdoll(delta) {
+    if (!this.ragdoll) return;
+    const dt = delta / 1000;
+    const groundY = GAME_CONFIG.GROUND_Y;
+
+    for (const p of this.ragdoll) {
+      p.vy += GAME_CONFIG.GRAVITY * dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.rot += p.rotSpeed * dt;
+
+      // Bounce off ground
+      if (p.y > groundY - 5) {
+        p.y = groundY - 5;
+        p.vy = -p.vy * 0.4;
+        p.vx *= 0.7;
+        p.rotSpeed *= 0.5;
+        if (Math.abs(p.vy) < 30) {
+          p.vy = 0;
+          p.rotSpeed = 0;
+        }
+      }
+    }
   }
 
   draw() {
@@ -486,6 +553,10 @@ export class Enemy {
         pose = ENEMY_STUNNED;
         break;
       case ENEMY_STATES.DEAD:
+        if (this.ragdoll) {
+          this.drawRagdoll();
+          return;
+        }
         pose = ENEMY_HIT;
         break;
       default:
@@ -509,6 +580,46 @@ export class Enemy {
       this.type.bodyScale, this.type.headRadius,
       alpha
     );
+  }
+
+  drawRagdoll() {
+    if (!this.ragdoll) return;
+    const g = this.graphics;
+    g.clear();
+    const alpha = Math.max(0, 1 - this.stateTimer / 2500);
+    const color = this.type.color;
+
+    for (const p of this.ragdoll) {
+      g.save && g.save();
+      if (p.shape === 'circle') {
+        g.fillStyle(color, 0.4 * alpha);
+        g.fillCircle(p.x, p.y, p.size);
+        g.lineStyle(2, color, alpha);
+        g.strokeCircle(p.x, p.y, p.size);
+      } else if (p.shape === 'rect') {
+        g.fillStyle(color, 0.6 * alpha);
+        const cos = Math.cos(p.rot);
+        const sin = Math.sin(p.rot);
+        // Draw rotated torso as a line with thickness
+        g.lineStyle(p.w, color, alpha);
+        g.lineBetween(
+          p.x - sin * p.h / 2, p.y - cos * p.h / 2,
+          p.x + sin * p.h / 2, p.y + cos * p.h / 2
+        );
+      } else if (p.shape === 'line') {
+        g.lineStyle(3, color, alpha);
+        const cos = Math.cos(p.rot);
+        const sin = Math.sin(p.rot);
+        g.lineBetween(
+          p.x, p.y,
+          p.x + sin * p.len, p.y + cos * p.len
+        );
+        // Joint dot
+        g.fillStyle(color, 0.7 * alpha);
+        g.fillCircle(p.x, p.y, 2);
+        g.fillCircle(p.x + sin * p.len, p.y + cos * p.len, 2.5);
+      }
+    }
   }
 
   drawHealthBar() {
