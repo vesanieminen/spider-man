@@ -94,6 +94,8 @@ export class Enemy {
     const bw = GAME_CONFIG.BODY_WIDTH * type.bodyScale;
     const bh = GAME_CONFIG.BODY_HEIGHT * type.bodyScale;
     this.body.setSize(bw, bh);
+    // Center the physics body on the sprite - offset from 32x32 __DEFAULT texture
+    this.body.body.setOffset((32 - bw) / 2, (32 - bh) / 2);
     this.body.setCollideWorldBounds(false);
     this.body.setMaxVelocity(1500, 1500);
 

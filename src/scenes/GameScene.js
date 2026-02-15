@@ -136,7 +136,8 @@ export class GameScene extends Phaser.Scene {
     const cameraX = this.cameras.main.scrollX;
     const spawned = this.spawner.update(cameraX, this.enemies.filter(e => e.alive).length);
     for (const def of spawned) {
-      const enemy = new Enemy(this, def.x, GAME_CONFIG.GROUND_Y - 40, def.type);
+      const spawnY = GAME_CONFIG.GROUND_Y - 40 * (def.type.bodyScale || 1);
+      const enemy = new Enemy(this, def.x, spawnY, def.type);
       this.physics.add.collider(enemy.body, this.groundBody);
       this.enemies.push(enemy);
 
