@@ -8,17 +8,20 @@ export class Game {
     this.width = GAME_CONFIG.WIDTH;
     this.height = GAME_CONFIG.HEIGHT;
 
-    // Renderer
+    // Renderer - fill the window
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.setSize(this.width, this.height);
+    this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.setClearColor(0x0a0a1e);
+    this.renderer.setClearColor(0x141438);
     container.insertBefore(this.renderer.domElement, container.firstChild);
 
-    // Camera
-    this.camera = new THREE.PerspectiveCamera(45, this.width / this.height, 1, 2000);
+    // Camera - use game world aspect for FOV, window aspect for projection
+    this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 2000);
     this.camera.position.set(this.width / 2, -this.height / 2 + this.height / 2, 800);
     this.camera.lookAt(this.width / 2, -this.height / 2 + this.height / 2, 0);
+
+    // Handle window resize
+    window.addEventListener('resize', () => this._onResize());
 
     // Scenes
     this.scenes = {};
@@ -36,6 +39,14 @@ export class Game {
     // Start loop
     this.animate = this.animate.bind(this);
     requestAnimationFrame(this.animate);
+  }
+
+  _onResize() {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    this.renderer.setSize(w, h);
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
   }
 
   startScene(key, data) {

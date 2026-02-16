@@ -26,11 +26,14 @@ export class GameScene extends Scene {
     this.worldWidth = GAME_CONFIG.LEVEL_WIDTH;
 
     // Lighting
-    const ambient = new THREE.AmbientLight(0x404060, 1);
+    const ambient = new THREE.AmbientLight(0x8090cc, 1.2);
     this.scene3D.add(ambient);
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
     dirLight.position.set(200, 200, 400);
     this.scene3D.add(dirLight);
+    const fillLight = new THREE.DirectionalLight(0x4466aa, 0.5);
+    fillLight.position.set(-200, 100, 200);
+    this.scene3D.add(fillLight);
 
     // Background
     this.background = new Background3D(this.scene3D);

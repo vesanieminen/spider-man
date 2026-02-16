@@ -12,9 +12,9 @@ export class TitleScene extends Scene {
 
   create() {
     // Lighting
-    const ambient = new THREE.AmbientLight(0x404060, 1);
+    const ambient = new THREE.AmbientLight(0x8090cc, 1.2);
     this.scene3D.add(ambient);
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
     dirLight.position.set(200, 200, 400);
     this.scene3D.add(dirLight);
 
