@@ -87,8 +87,8 @@ export class Player {
     // State machine
     this.updateState(delta, actions);
 
-    // Clamp to level bounds
-    this.body.x = Math.max(20, Math.min(GAME_CONFIG.LEVEL_WIDTH - 20, this.body.x));
+    // Clamp to left boundary only (endless right scrolling)
+    this.body.x = Math.max(20, this.body.x);
 
     // Update position
     this.x = this.body.x;

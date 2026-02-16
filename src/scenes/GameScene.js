@@ -36,14 +36,16 @@ export class GameScene extends Phaser.Scene {
   }
 
   create() {
-    // World bounds
-    this.physics.world.setBounds(0, 0, GAME_CONFIG.LEVEL_WIDTH, GAME_CONFIG.HEIGHT);
+    this.worldWidth = GAME_CONFIG.LEVEL_WIDTH;
 
-    // Ground
+    // World bounds
+    this.physics.world.setBounds(0, 0, this.worldWidth, GAME_CONFIG.HEIGHT);
+
+    // Ground - start large, will be expanded
     const ground = this.add.rectangle(
-      GAME_CONFIG.LEVEL_WIDTH / 2,
+      this.worldWidth / 2,
       GAME_CONFIG.GROUND_Y + 50,
-      GAME_CONFIG.LEVEL_WIDTH,
+      this.worldWidth,
       100
     );
     this.physics.add.existing(ground, true);
@@ -74,7 +76,7 @@ export class GameScene extends Phaser.Scene {
     this.player = p1;
 
     // Camera
-    this.cameras.main.setBounds(0, 0, GAME_CONFIG.LEVEL_WIDTH, GAME_CONFIG.HEIGHT);
+    this.cameras.main.setBounds(0, 0, this.worldWidth, GAME_CONFIG.HEIGHT);
 
     // Enemies
     this.enemies = [];
@@ -97,6 +99,7 @@ export class GameScene extends Phaser.Scene {
     // Enemy target tracking (hysteresis to prevent flip-flopping)
     this.enemyTargets = new Map();
     this.targetHysteresis = 1000;
+
   }
 
   update(time, delta) {
@@ -132,18 +135,32 @@ export class GameScene extends Phaser.Scene {
       this.handleWebPull(slot.player, delta);
     }
 
+    const aliveEnemies = this.enemies.filter(e => e.alive);
+
     // Spawn enemies based on camera position
-    const cameraX = this.cameras.main.scrollX;
-    const spawned = this.spawner.update(cameraX, this.enemies.filter(e => e.alive).length);
+    const cam = this.cameras.main;
+    const cameraX = cam.scrollX;
+    const spawned = this.spawner.update(cameraX, aliveEnemies.length);
     for (const def of spawned) {
-      const spawnY = GAME_CONFIG.GROUND_Y - 40 * (def.type.bodyScale || 1);
-      const enemy = new Enemy(this, def.x, spawnY, def.type);
+      // Apply difficulty scalers to create a scaled type
+      const scaledType = def.scalers ? {
+        ...def.type,
+        hp: Math.round(def.type.hp * def.scalers.hp),
+        damage: Math.round(def.type.damage * def.scalers.dmg),
+        speed: Math.round(def.type.speed * def.scalers.speed),
+      } : def.type;
+
+      const spawnY = GAME_CONFIG.GROUND_Y - 40 * (scaledType.bodyScale || 1);
+      const enemy = new Enemy(this, def.x, spawnY, scaledType);
       this.physics.add.collider(enemy.body, this.groundBody);
       this.enemies.push(enemy);
 
+      // Expand world as needed
+      this.expandWorld(def.x + 800);
+
       // Boss entry text
-      if (def.type.isBoss) {
-        spawnBossEntryText(this, def.type.name);
+      if (scaledType.isBoss) {
+        spawnBossEntryText(this, scaledType.name);
       }
     }
 
@@ -219,18 +236,19 @@ export class GameScene extends Phaser.Scene {
       this.scene.start('GameOverScene', {
         score: this.score,
         maxCombo: this.maxCombo,
-        won: false,
+        wave: this.spawner.currentWave,
       });
     }
 
-    // Win condition
-    if (this.spawner.isComplete() && this.enemies.filter(e => e.alive).length === 0) {
-      this.scene.start('GameOverScene', {
-        score: this.score,
-        maxCombo: this.maxCombo,
-        won: true,
-      });
-    }
+    // Clean up dead enemies that are far behind camera to save memory
+    const cleanupX = cameraX - 800;
+    this.enemies = this.enemies.filter(e => {
+      if (!e.alive && e.x < cleanupX) {
+        e.destroy();
+        return false;
+      }
+      return true;
+    });
   }
 
   spawnPlayer2(config) {
@@ -361,6 +379,21 @@ export class GameScene extends Phaser.Scene {
     return nearest;
   }
 
+  expandWorld(neededX) {
+    if (neededX <= this.worldWidth) return;
+    this.worldWidth = neededX + 2000;
+    this.physics.world.setBounds(0, 0, this.worldWidth, GAME_CONFIG.HEIGHT);
+    this.cameras.main.setBounds(0, 0, this.worldWidth, GAME_CONFIG.HEIGHT);
+
+    // Expand ground body
+    this.groundBody.setSize(this.worldWidth, 100);
+    this.groundBody.setPosition(this.worldWidth / 2, GAME_CONFIG.GROUND_Y + 50);
+    this.groundBody.body.updateFromGameObject();
+
+    // Expand background ground drawing
+    this.background.expandGround(this.worldWidth);
+  }
+
   updateCamera(delta) {
     const activePlayers = this.players.filter(p => p.active && p.player.health > 0);
     if (activePlayers.length === 0) return;
@@ -400,9 +433,26 @@ export class GameScene extends Phaser.Scene {
       cam.setZoom(cam.zoom + (targetZoom - cam.zoom) * 0.05);
     }
 
-    // Clamp camera
-    cam.scrollX = Math.max(0, Math.min(GAME_CONFIG.LEVEL_WIDTH - GAME_CONFIG.WIDTH, cam.scrollX));
+    // Clamp camera - don't scroll so far right that leftmost enemy leaves the screen
+    const aliveEnemies = this.enemies.filter(e => e.alive);
+    let maxCamScrollX = this.worldWidth - GAME_CONFIG.WIDTH;
+    if (aliveEnemies.length > 0) {
+      const leftmostEnemy = Math.min(...aliveEnemies.map(e => e.x));
+      // Camera left edge can't go past leftmostEnemy - margin, keeping enemy visible
+      maxCamScrollX = Math.min(maxCamScrollX, leftmostEnemy - 80);
+    }
+    cam.scrollX = Math.max(0, Math.min(maxCamScrollX, cam.scrollX));
     cam.scrollY = Math.max(0, Math.min(GAME_CONFIG.HEIGHT - GAME_CONFIG.HEIGHT, cam.scrollY));
+
+    // Clamp players to screen edges
+    const screenLeft = cam.scrollX + 20;
+    const screenRight = cam.scrollX + GAME_CONFIG.WIDTH / cam.zoom - 20;
+    for (const slot of this.players) {
+      if (!slot.active) continue;
+      const p = slot.player;
+      if (p.body.x < screenLeft) { p.body.x = screenLeft; p.x = p.body.x; }
+      if (p.body.x > screenRight) { p.body.x = screenRight; p.body.body.setVelocityX(0); p.x = p.body.x; }
+    }
   }
 
   resolvePlayerAttack(player) {

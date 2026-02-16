@@ -19,7 +19,7 @@ export class GameOverScene extends Phaser.Scene {
   init(data) {
     this.finalScore = data.score || 0;
     this.maxCombo = data.maxCombo || 0;
-    this.won = data.won || false;
+    this.waveReached = data.wave || 0;
   }
 
   create() {
@@ -28,21 +28,27 @@ export class GameOverScene extends Phaser.Scene {
     // Background
     this.add.graphics().fillStyle(0x0a0a1e, 1).fillRect(0, 0, GAME_CONFIG.WIDTH, GAME_CONFIG.HEIGHT);
 
-    // Result
-    const headerText = this.won ? 'CITY SAVED!' : 'GAME OVER';
-    const headerColor = this.won ? '#44ff44' : '#ff3333';
-
-    this.add.text(cx, 100, headerText, {
+    // Header
+    this.add.text(cx, 80, 'GAME OVER', {
       fontSize: '56px',
       fontFamily: 'monospace',
-      color: headerColor,
+      color: '#ff3333',
       fontStyle: 'bold',
       stroke: '#000',
       strokeThickness: 6,
     }).setOrigin(0.5);
 
+    // Wave reached
+    this.add.text(cx, 170, `WAVE REACHED: ${this.waveReached}`, {
+      fontSize: '24px',
+      fontFamily: 'monospace',
+      color: '#6688ff',
+      stroke: '#000',
+      strokeThickness: 3,
+    }).setOrigin(0.5);
+
     // Score
-    this.add.text(cx, 220, `FINAL SCORE: ${this.finalScore}`, {
+    this.add.text(cx, 230, `FINAL SCORE: ${this.finalScore}`, {
       fontSize: '32px',
       fontFamily: 'monospace',
       color: '#ffffff',
@@ -51,7 +57,7 @@ export class GameOverScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     // Max combo
-    this.add.text(cx, 280, `MAX COMBO: ${this.maxCombo}`, {
+    this.add.text(cx, 290, `MAX COMBO: ${this.maxCombo}`, {
       fontSize: '22px',
       fontFamily: 'monospace',
       color: '#ffff00',
@@ -61,7 +67,7 @@ export class GameOverScene extends Phaser.Scene {
 
     // Grade
     const { grade, color } = getGrade(this.finalScore);
-    this.add.text(cx, 380, grade, {
+    this.add.text(cx, 390, grade, {
       fontSize: '120px',
       fontFamily: 'monospace',
       color: color,
@@ -70,7 +76,7 @@ export class GameOverScene extends Phaser.Scene {
       strokeThickness: 8,
     }).setOrigin(0.5);
 
-    this.add.text(cx, 460, 'RANK', {
+    this.add.text(cx, 470, 'RANK', {
       fontSize: '20px',
       fontFamily: 'monospace',
       color: '#888888',
@@ -93,15 +99,10 @@ export class GameOverScene extends Phaser.Scene {
       duration: 600,
     });
 
-    // Play result sound
-    if (this.won) {
-      SoundManager.victory();
-    } else {
-      SoundManager.gameOver();
-    }
+    SoundManager.gameOver();
 
     this.started = false;
-    this.startDelay = 500; // Brief delay to avoid phantom inputs
+    this.startDelay = 500;
   }
 
   restartGame(inputConfig) {

@@ -942,5 +942,6 @@ export class Enemy {
     this.webbedGraphics.destroy();
     if (this.projectile && this.projectile.graphics) this.projectile.graphics.destroy();
     if (this.bomb && this.bomb.graphics) this.bomb.graphics.destroy();
+    if (this.body) this.body.destroy();
   }
 }

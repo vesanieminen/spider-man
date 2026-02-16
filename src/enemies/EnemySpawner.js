@@ -1,74 +1,26 @@
 import { ENEMY_TYPES } from './EnemyTypes.js';
 
-const WAVES = [
-  { trigger: 200, enemies: [
-    { type: 'THUG', x: 500, y: 0 },
-    { type: 'THUG', x: 600, y: 0 },
-  ]},
-  { trigger: 800, enemies: [
-    { type: 'THUG', x: 1100, y: 0 },
-    { type: 'THUG', x: 1200, y: 0 },
-    { type: 'THUG', x: 1300, y: 0 },
-  ]},
-  { trigger: 1500, enemies: [
-    { type: 'THUG', x: 1800, y: 0 },
-    { type: 'NINJA', x: 1950, y: 0 },
-    { type: 'THUG', x: 2100, y: 0 },
-  ]},
-  // Boss wave: Lizard
-  { trigger: 2200, enemies: [
-    { type: 'LIZARD', x: 2600, y: 0 },
-    { type: 'THUG', x: 2750, y: 0 },
-    { type: 'THUG', x: 2500, y: 0 },
-  ]},
-  { trigger: 2900, enemies: [
-    { type: 'NINJA', x: 3200, y: 0 },
-    { type: 'NINJA', x: 3350, y: 0 },
-    { type: 'BOMBER', x: 3500, y: 0 },
-  ]},
-  // Boss wave: Doc Ock
-  { trigger: 3600, enemies: [
-    { type: 'DOC_OCK', x: 4000, y: 0 },
-    { type: 'THUG', x: 3900, y: 0 },
-    { type: 'THUG', x: 4100, y: 0 },
-  ]},
-  { trigger: 4300, enemies: [
-    { type: 'NINJA', x: 4600, y: 0 },
-    { type: 'BOMBER', x: 4750, y: 0 },
-    { type: 'NINJA', x: 4900, y: 0 },
-    { type: 'BOMBER', x: 5050, y: 0 },
-  ]},
-  // Boss wave: Green Goblin
-  { trigger: 5100, enemies: [
-    { type: 'GREEN_GOBLIN', x: 5500, y: 0 },
-    { type: 'NINJA', x: 5400, y: 0 },
-    { type: 'NINJA', x: 5600, y: 0 },
-  ]},
-  { trigger: 5800, enemies: [
-    { type: 'NINJA', x: 6100, y: 0 },
-    { type: 'NINJA', x: 6200, y: 0 },
-    { type: 'NINJA', x: 6300, y: 0 },
-    { type: 'BOMBER', x: 6400, y: 0 },
-    { type: 'BRUTE', x: 6250, y: 0 },
-  ]},
-  // Boss wave: Rhino
-  { trigger: 6500, enemies: [
-    { type: 'RHINO', x: 6900, y: 0 },
-    { type: 'BRUTE', x: 7100, y: 0 },
-  ]},
-  { trigger: 7000, enemies: [
-    { type: 'BRUTE', x: 7400, y: 0 },
-    { type: 'NINJA', x: 7500, y: 0 },
-    { type: 'NINJA', x: 7600, y: 0 },
-    { type: 'BOMBER', x: 7700, y: 0 },
-    { type: 'THUG', x: 7350, y: 0 },
-    { type: 'THUG', x: 7550, y: 0 },
-  ]},
-  // Final boss: Venom
-  { trigger: 7500, enemies: [
-    { type: 'VENOM', x: 8000, y: 0 },
-  ]},
-];
+const REGULAR_TYPES = ['THUG', 'NINJA', 'BOMBER', 'BRUTE'];
+const BOSS_TYPES = ['LIZARD', 'DOC_OCK', 'GREEN_GOBLIN', 'RHINO', 'VENOM'];
+
+// Difficulty scales with wave number
+function getDifficulty(wave) {
+  return {
+    // Enemy counts match original game feel (2-3 early, 3-6 mid, up to 8 late)
+    minEnemies: Math.min(2 + Math.floor(wave / 2), 6),
+    maxEnemies: Math.min(3 + wave, 8),
+    // Which enemy types are available (unlock tougher ones over time)
+    availableTypes: REGULAR_TYPES.slice(0, Math.min(1 + Math.floor(wave / 2), REGULAR_TYPES.length)),
+    // Boss every 3rd wave starting from wave 3
+    isBossWave: wave >= 3 && wave % 3 === 0,
+    // HP multiplier increases over time
+    hpMultiplier: 1 + (wave - 1) * 0.08,
+    // Damage multiplier
+    dmgMultiplier: 1 + (wave - 1) * 0.05,
+    // Speed multiplier
+    speedMultiplier: 1 + (wave - 1) * 0.03,
+  };
+}
 
 export class EnemySpawner {
   constructor() {
@@ -76,25 +28,45 @@ export class EnemySpawner {
     this.waveActive = false;
     this.waveEnemies = [];
     this.showGoPrompt = false;
+    this.nextTrigger = 200; // First wave trigger distance
+    this.usedBosses = []; // Track recently used bosses to avoid repeats
   }
 
   update(cameraX, activeEnemies) {
     const spawned = [];
 
-    if (this.currentWave < WAVES.length) {
-      const wave = WAVES[this.currentWave];
-      if (cameraX >= wave.trigger) {
-        for (const def of wave.enemies) {
-          spawned.push({
-            type: ENEMY_TYPES[def.type],
-            x: def.x,
-          });
-        }
-        this.waveActive = true;
-        this.waveEnemies = [...spawned];
-        this.currentWave++;
-        this.showGoPrompt = false;
+    if (!this.waveActive && cameraX >= this.nextTrigger) {
+      this.currentWave++;
+      const diff = getDifficulty(this.currentWave);
+      const baseX = cameraX + 600; // Spawn ahead of camera
+
+      // Spawn regular enemies
+      const count = diff.minEnemies + Math.floor(Math.random() * (diff.maxEnemies - diff.minEnemies + 1));
+      for (let i = 0; i < count; i++) {
+        const typeKey = diff.availableTypes[Math.floor(Math.random() * diff.availableTypes.length)];
+        spawned.push({
+          type: ENEMY_TYPES[typeKey],
+          x: baseX + i * 120 + Math.random() * 60,
+          scalers: { hp: diff.hpMultiplier, dmg: diff.dmgMultiplier, speed: diff.speedMultiplier },
+        });
       }
+
+      // Boss wave: add a random boss
+      if (diff.isBossWave) {
+        const boss = this.pickRandomBoss();
+        spawned.push({
+          type: ENEMY_TYPES[boss],
+          x: baseX + count * 120 + 50,
+          scalers: { hp: diff.hpMultiplier, dmg: diff.dmgMultiplier, speed: diff.speedMultiplier },
+        });
+      }
+
+      this.waveActive = true;
+      this.waveEnemies = [...spawned];
+      this.showGoPrompt = false;
+
+      // Next wave trigger: advance further each wave
+      this.nextTrigger = cameraX + 500 + Math.min(this.currentWave * 30, 300);
     }
 
     if (this.waveActive && activeEnemies === 0) {
@@ -105,11 +77,22 @@ export class EnemySpawner {
     return spawned;
   }
 
+  pickRandomBoss() {
+    // Avoid repeating the last 2 bosses
+    const available = BOSS_TYPES.filter(b => !this.usedBosses.includes(b));
+    const pool = available.length > 0 ? available : BOSS_TYPES;
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    this.usedBosses.push(pick);
+    if (this.usedBosses.length > 2) this.usedBosses.shift();
+    return pick;
+  }
+
   isComplete() {
-    return this.currentWave >= WAVES.length;
+    // Never complete - endless mode
+    return false;
   }
 
   get totalWaves() {
-    return WAVES.length;
+    return Infinity;
   }
 }

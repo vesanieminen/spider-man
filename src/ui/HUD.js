@@ -175,7 +175,7 @@ export class HUD {
 
     // Wave
     if (wave > 0) {
-      this.waveText.setText(`WAVE ${wave}/${totalWaves}`);
+      this.waveText.setText(`WAVE ${wave}`);
     }
 
     // GO prompt

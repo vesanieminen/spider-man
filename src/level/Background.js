@@ -119,21 +119,27 @@ export class Background {
     }
   }
 
-  drawGround() {
+  drawGround(width) {
+    const w = width || GAME_CONFIG.LEVEL_WIDTH;
     const g = this.groundGraphics;
+    g.clear();
     // Main ground
     g.fillStyle(0x222233, 1);
-    g.fillRect(0, GAME_CONFIG.GROUND_Y, GAME_CONFIG.LEVEL_WIDTH, GAME_CONFIG.HEIGHT - GAME_CONFIG.GROUND_Y);
+    g.fillRect(0, GAME_CONFIG.GROUND_Y, w, GAME_CONFIG.HEIGHT - GAME_CONFIG.GROUND_Y);
 
     // Road lines
     g.fillStyle(0x333344, 1);
-    g.fillRect(0, GAME_CONFIG.GROUND_Y, GAME_CONFIG.LEVEL_WIDTH, 3);
+    g.fillRect(0, GAME_CONFIG.GROUND_Y, w, 3);
 
     // Dashed center line
     g.fillStyle(0x555555, 0.5);
-    for (let x = 0; x < GAME_CONFIG.LEVEL_WIDTH; x += 60) {
+    for (let x = 0; x < w; x += 60) {
       g.fillRect(x, GAME_CONFIG.GROUND_Y + 40, 30, 2);
     }
+  }
+
+  expandGround(newWidth) {
+    this.drawGround(newWidth);
   }
 
   drawAllLayers() {
