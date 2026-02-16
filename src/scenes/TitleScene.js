@@ -1,109 +1,112 @@
-import Phaser from 'phaser';
+import * as THREE from 'three';
+import { Scene } from '../core/Scene.js';
 import { GAME_CONFIG } from '../config.js';
 import { SoundManager } from '../audio/SoundManager.js';
 import { InputManager, INPUT_CONFIGS } from '../input/InputManager.js';
+import { Background3D } from '../level/Background3D.js';
 
-export class TitleScene extends Phaser.Scene {
+export class TitleScene extends Scene {
   constructor() {
     super('TitleScene');
   }
 
   create() {
-    const cx = GAME_CONFIG.WIDTH / 2;
-    const cy = GAME_CONFIG.HEIGHT / 2;
+    // Lighting
+    const ambient = new THREE.AmbientLight(0x404060, 1);
+    this.scene3D.add(ambient);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    dirLight.position.set(200, 200, 400);
+    this.scene3D.add(dirLight);
 
-    // Dark city background
-    this.add.graphics().fillStyle(0x0a0a1e, 1).fillRect(0, 0, GAME_CONFIG.WIDTH, GAME_CONFIG.HEIGHT);
+    // Background
+    this.background = new Background3D(this.scene3D);
 
-    // Simple city silhouette
-    const bg = this.add.graphics();
-    bg.fillStyle(0x111122, 1);
-    for (let i = 0; i < 15; i++) {
-      const bx = i * 90;
-      const bw = 60 + Math.random() * 30;
-      const bh = 80 + Math.random() * 200;
-      bg.fillRect(bx, GAME_CONFIG.HEIGHT - bh, bw, bh);
-      // Windows
-      bg.fillStyle(0xffdd88, 0.3);
-      for (let wy = GAME_CONFIG.HEIGHT - bh + 15; wy < GAME_CONFIG.HEIGHT - 20; wy += 20) {
-        for (let wx = bx + 8; wx < bx + bw - 8; wx += 16) {
-          if (Math.random() < 0.3) {
-            bg.fillRect(wx, wy, 8, 10);
-          }
-        }
-      }
-      bg.fillStyle(0x111122, 1);
-    }
-
-    // Animated swinging stick figure
+    // Swinging figure params
     this.swingAngle = 0;
-    this.swingGraphics = this.add.graphics().setDepth(10);
+    const cx = GAME_CONFIG.WIDTH / 2;
     this.webAnchorX = cx + 50;
     this.webAnchorY = 100;
 
-    // Title
-    this.add.text(cx, 120, 'WEB SLINGER', {
-      fontSize: '64px',
-      fontFamily: 'monospace',
-      color: '#ff3333',
-      fontStyle: 'bold',
-      stroke: '#000',
-      strokeThickness: 6,
-    }).setOrigin(0.5).setDepth(20);
+    // Web line
+    const webMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 });
+    const webGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0, 5),
+      new THREE.Vector3(0, 0, 5),
+    ]);
+    this.webLine = new THREE.Line(webGeo, webMat);
+    this.scene3D.add(this.webLine);
 
-    this.add.text(cx, 180, 'A Spider Beat \'Em Up', {
-      fontSize: '20px',
-      fontFamily: 'monospace',
-      color: '#6688ff',
-      stroke: '#000',
-      strokeThickness: 3,
-    }).setOrigin(0.5).setDepth(20);
+    // Simple stick figure using basic meshes
+    this.figureMeshes = [];
+    const bodyColor = 0x3366ff;
+    const accentColor = 0xee2222;
 
-    // Controls info - show both keyboard layouts
-    const controls = [
-      'P1: WASD + JKLI    P2: Arrows + Numpad 1-4',
-      'Move - Jump - Punch - Kick - Web Swing - Web Shoot',
-      'I - Web Shot    Down+I - Web Pull (yank enemy!)',
-      'Hold L - Web Swing    Down+K (air) - Dive Kick',
-      'Gamepad: Bumpers = Web Shoot    Supported!',
-    ];
-    controls.forEach((line, i) => {
-      this.add.text(cx, 410 + i * 28, line, {
-        fontSize: '14px',
-        fontFamily: 'monospace',
-        color: '#aaaaaa',
-        stroke: '#000',
-        strokeThickness: 2,
-      }).setOrigin(0.5).setDepth(20);
-    });
+    // Head
+    const headGeo = new THREE.SphereGeometry(10, 8, 6);
+    const headMat = new THREE.MeshLambertMaterial({ color: accentColor });
+    this.head = new THREE.Mesh(headGeo, headMat);
+    this.scene3D.add(this.head);
+    this.figureMeshes.push(this.head);
 
-    // Co-op text
-    this.add.text(cx, 540, '2-PLAYER CO-OP: Player 2 can join anytime!', {
-      fontSize: '16px',
-      fontFamily: 'monospace',
-      color: '#ffee00',
-      stroke: '#000',
-      strokeThickness: 2,
-    }).setOrigin(0.5).setDepth(20);
+    // Eyes
+    const eyeGeo = new THREE.SphereGeometry(2.5, 6, 4);
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    this.eyeL = new THREE.Mesh(eyeGeo, eyeMat);
+    this.eyeR = new THREE.Mesh(eyeGeo, eyeMat);
+    this.scene3D.add(this.eyeL);
+    this.scene3D.add(this.eyeR);
+    this.figureMeshes.push(this.eyeL, this.eyeR);
 
-    // Start prompt
-    this.startText = this.add.text(cx, 590, 'Press Any Key to Start', {
-      fontSize: '24px',
-      fontFamily: 'monospace',
-      color: '#ffff00',
-      stroke: '#000',
-      strokeThickness: 3,
-    }).setOrigin(0.5).setDepth(20);
+    // Body + limb cylinders
+    const cylGeo = new THREE.CylinderGeometry(2, 2, 1, 6);
+    const bodyMat = new THREE.MeshLambertMaterial({ color: bodyColor });
+    const legMat = new THREE.MeshLambertMaterial({ color: accentColor });
+
+    this.torso = new THREE.Mesh(cylGeo, bodyMat);
+    this.armL = new THREE.Mesh(cylGeo, bodyMat);
+    this.armR = new THREE.Mesh(cylGeo, bodyMat);
+    this.legL = new THREE.Mesh(cylGeo, legMat);
+    this.legR = new THREE.Mesh(cylGeo, legMat);
+    for (const m of [this.torso, this.armL, this.armR, this.legL, this.legR]) {
+      m.scale.set(3, 1, 3);
+      this.scene3D.add(m);
+      this.figureMeshes.push(m);
+    }
+
+    // Create CSS overlay for title text
+    this.overlay = document.createElement('div');
+    this.overlay.id = 'title-overlay';
+    this.overlay.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;font-family:monospace;';
+    this.overlay.innerHTML = `
+      <div style="text-align:center;margin-top:80px;font-size:64px;color:#ff3333;font-weight:bold;text-shadow:0 0 6px #000,0 0 6px #000;">WEB SLINGER</div>
+      <div style="text-align:center;margin-top:10px;font-size:20px;color:#6688ff;text-shadow:0 0 3px #000,0 0 3px #000;">A Spider Beat 'Em Up</div>
+      <div style="text-align:center;margin-top:120px;font-size:14px;color:#aaa;text-shadow:0 0 3px #000;line-height:1.8;">
+        P1: WASD + JKLI &nbsp;&nbsp; P2: Arrows + Numpad 1-4<br>
+        Move - Jump - Punch - Kick - Web Swing - Web Shoot<br>
+        I - Web Shot &nbsp;&nbsp; Down+I - Web Pull (yank enemy!)<br>
+        Hold L - Web Swing &nbsp;&nbsp; Down+K (air) - Dive Kick<br>
+        Gamepad: Bumpers = Web Shoot &nbsp;&nbsp; Supported!
+      </div>
+      <div style="text-align:center;margin-top:20px;font-size:16px;color:#ffee00;text-shadow:0 0 3px #000;">2-PLAYER CO-OP: Player 2 can join anytime!</div>
+      <div id="title-start" style="text-align:center;margin-top:30px;font-size:24px;color:#ffff00;text-shadow:0 0 4px #000;">Press Any Key to Start</div>
+    `;
+    document.getElementById('game-container').appendChild(this.overlay);
+
+    // Hide game HUD on title screen
+    document.getElementById('hud').style.display = 'none';
 
     this.started = false;
-    this.startDelay = 300; // Brief delay to avoid phantom inputs
+    this.startDelay = 300;
   }
 
   startGame(inputConfig) {
     if (this.started) return;
     this.started = true;
     SoundManager.menuSelect();
-    this.scene.start('GameScene', { inputConfig });
+    if (this.overlay && this.overlay.parentNode) {
+      this.overlay.parentNode.removeChild(this.overlay);
+    }
+    this.game.startScene('GameScene', { inputConfig });
   }
 
   update(time, delta) {
@@ -113,54 +116,71 @@ export class TitleScene extends Phaser.Scene {
     const px = this.webAnchorX + Math.sin(this.swingAngle) * ropeLen;
     const py = this.webAnchorY + Math.cos(this.swingAngle) * ropeLen;
 
-    const g = this.swingGraphics;
-    g.clear();
+    // Convert to Three.js coords (flip Y)
+    const tpx = px;
+    const tpy = -py;
+    const anchorTy = -this.webAnchorY;
 
     // Web line
-    g.lineStyle(2, 0xffffff, 0.7);
-    g.lineBetween(px, py - 20, this.webAnchorX, this.webAnchorY);
-
-    // Simple stick figure
-    const bodyColor = 0x3366ff;
-    const accentColor = 0xee2222;
+    const webPos = this.webLine.geometry.attributes.position.array;
+    webPos[0] = tpx; webPos[1] = tpy + 20; webPos[2] = 5;
+    webPos[3] = this.webAnchorX; webPos[4] = anchorTy; webPos[5] = 5;
+    this.webLine.geometry.attributes.position.needsUpdate = true;
 
     // Head
-    g.fillStyle(accentColor, 0.5);
-    g.fillCircle(px, py - 48, 10);
-    g.lineStyle(3, accentColor, 1);
-    g.strokeCircle(px, py - 48, 10);
+    this.head.position.set(tpx, tpy + 48, 5);
+    this.eyeL.position.set(tpx - 4, tpy + 47, 14);
+    this.eyeR.position.set(tpx + 4, tpy + 47, 14);
 
-    // Eyes
-    g.fillStyle(0xffffff, 0.9);
-    g.fillCircle(px - 4, py - 49, 2.5);
-    g.fillCircle(px + 4, py - 49, 2.5);
-
-    // Body
-    g.lineStyle(4, bodyColor, 1);
-    g.lineBetween(px, py - 38, px, py - 4);
+    // Torso (neck to hip)
+    const _up = new THREE.Vector3(0, 1, 0);
+    this._orientCylinder(this.torso, tpx, tpy + 38, tpx, tpy + 4, 5);
 
     // Arms
-    g.lineStyle(3, bodyColor, 1);
     const armAngle = this.swingAngle * 0.5;
-    g.lineBetween(px, py - 34, px + Math.sin(armAngle + 0.5) * 20, py - 50);
-    g.lineBetween(px, py - 34, px - 15, py - 20);
+    this._orientCylinder(this.armL, tpx, tpy + 34, tpx - 15, tpy + 20, 5);
+    this._orientCylinder(this.armR, tpx, tpy + 34, tpx + Math.sin(armAngle + 0.5) * 20, tpy + 50, 5);
 
     // Legs
-    g.lineStyle(3, accentColor, 1);
     const legSwing = Math.sin(this.swingAngle * 2) * 8;
-    g.lineBetween(px, py - 4, px - 8 + legSwing, py + 26);
-    g.lineBetween(px, py - 4, px + 8 - legSwing, py + 26);
+    this._orientCylinder(this.legL, tpx, tpy + 4, tpx - 8 + legSwing, tpy - 26, 5);
+    this._orientCylinder(this.legR, tpx, tpy + 4, tpx + 8 - legSwing, tpy - 26, 5);
 
     // Blink start text
-    this.startText.setAlpha(0.5 + Math.sin(time / 300) * 0.5);
+    const startEl = document.getElementById('title-start');
+    if (startEl) {
+      startEl.style.opacity = 0.5 + Math.sin(time / 300) * 0.5;
+    }
 
-    // Poll all input configs for any press
+    // Input detection
     this.startDelay -= delta;
     if (this.startDelay <= 0 && !this.started) {
-      const config = InputManager.detectAnyPress(this, []);
+      const config = InputManager.detectAnyPress([]);
       if (config) {
         this.startGame(config);
       }
     }
+  }
+
+  _orientCylinder(mesh, x1, y1, x2, y2, z) {
+    const mx = (x1 + x2) / 2;
+    const my = (y1 + y2) / 2;
+    mesh.position.set(mx, my, z);
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    mesh.scale.y = len;
+    if (len > 0.01) {
+      const dir = new THREE.Vector3(dx, dy, 0).normalize();
+      mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    }
+  }
+
+  destroy() {
+    super.destroy();
+    if (this.overlay && this.overlay.parentNode) {
+      this.overlay.parentNode.removeChild(this.overlay);
+    }
+    if (this.background) this.background.destroy();
   }
 }

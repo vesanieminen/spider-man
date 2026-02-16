@@ -1,34 +1,32 @@
-import Phaser from 'phaser';
-
 export const INPUT_CONFIGS = {
   KEYBOARD_1: {
     id: 'KEYBOARD_1',
     type: 'keyboard',
     keys: {
-      left: Phaser.Input.Keyboard.KeyCodes.A,
-      right: Phaser.Input.Keyboard.KeyCodes.D,
-      jump: Phaser.Input.Keyboard.KeyCodes.W,
-      jumpAlt: Phaser.Input.Keyboard.KeyCodes.SPACE,
-      down: Phaser.Input.Keyboard.KeyCodes.S,
-      punch: Phaser.Input.Keyboard.KeyCodes.J,
-      kick: Phaser.Input.Keyboard.KeyCodes.K,
-      web: Phaser.Input.Keyboard.KeyCodes.L,
-      webShoot: Phaser.Input.Keyboard.KeyCodes.I,
+      left: 'KeyA',
+      right: 'KeyD',
+      jump: 'KeyW',
+      jumpAlt: 'Space',
+      down: 'KeyS',
+      punch: 'KeyJ',
+      kick: 'KeyK',
+      web: 'KeyL',
+      webShoot: 'KeyI',
     },
   },
   KEYBOARD_2: {
     id: 'KEYBOARD_2',
     type: 'keyboard',
     keys: {
-      left: Phaser.Input.Keyboard.KeyCodes.LEFT,
-      right: Phaser.Input.Keyboard.KeyCodes.RIGHT,
-      jump: Phaser.Input.Keyboard.KeyCodes.UP,
+      left: 'ArrowLeft',
+      right: 'ArrowRight',
+      jump: 'ArrowUp',
       jumpAlt: null,
-      down: Phaser.Input.Keyboard.KeyCodes.DOWN,
-      punch: Phaser.Input.Keyboard.KeyCodes.NUMPAD_ONE,
-      kick: Phaser.Input.Keyboard.KeyCodes.NUMPAD_TWO,
-      web: Phaser.Input.Keyboard.KeyCodes.NUMPAD_THREE,
-      webShoot: Phaser.Input.Keyboard.KeyCodes.NUMPAD_FOUR,
+      down: 'ArrowDown',
+      punch: 'Numpad1',
+      kick: 'Numpad2',
+      web: 'Numpad3',
+      webShoot: 'Numpad4',
     },
   },
   GAMEPAD_0: {
@@ -43,19 +41,30 @@ export const INPUT_CONFIGS = {
   },
 };
 
-export class InputManager {
-  constructor(scene, config) {
-    this.scene = scene;
-    this.config = config;
+// Global key state - shared across all InputManager instances
+const keyState = {};
 
-    if (config.type === 'keyboard') {
-      this.keys = {};
-      for (const [action, keyCode] of Object.entries(config.keys)) {
-        if (keyCode !== null) {
-          this.keys[action] = scene.input.keyboard.addKey(keyCode);
-        }
-      }
+// Set up global listeners once
+let listenersInstalled = false;
+function installKeyListeners() {
+  if (listenersInstalled) return;
+  listenersInstalled = true;
+  window.addEventListener('keydown', (e) => {
+    keyState[e.code] = true;
+    // Prevent default for game keys to stop scrolling
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) {
+      e.preventDefault();
     }
+  });
+  window.addEventListener('keyup', (e) => {
+    keyState[e.code] = false;
+  });
+}
+
+export class InputManager {
+  constructor(config) {
+    this.config = config;
+    installKeyListeners();
 
     this.prevState = {
       jump: false,
@@ -94,80 +103,75 @@ export class InputManager {
   }
 
   readKeyboard() {
+    const k = this.config.keys;
     return {
-      left: this.keys.left && this.keys.left.isDown,
-      right: this.keys.right && this.keys.right.isDown,
-      jump: (this.keys.jump && this.keys.jump.isDown) || (this.keys.jumpAlt && this.keys.jumpAlt.isDown),
-      down: this.keys.down && this.keys.down.isDown,
-      punch: this.keys.punch && this.keys.punch.isDown,
-      kick: this.keys.kick && this.keys.kick.isDown,
-      web: this.keys.web && this.keys.web.isDown,
-      webShoot: this.keys.webShoot && this.keys.webShoot.isDown,
+      left: !!keyState[k.left],
+      right: !!keyState[k.right],
+      jump: !!keyState[k.jump] || (k.jumpAlt && !!keyState[k.jumpAlt]),
+      down: !!keyState[k.down],
+      punch: !!keyState[k.punch],
+      kick: !!keyState[k.kick],
+      web: !!keyState[k.web],
+      webShoot: !!keyState[k.webShoot],
     };
   }
 
   readGamepad() {
     const none = { left: false, right: false, jump: false, down: false, punch: false, kick: false, web: false, webShoot: false };
-    const pads = this.scene.input.gamepad;
-    if (!pads) return none;
-    const pad = pads.getPad(this.config.padIndex);
+    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+    const pad = pads[this.config.padIndex];
     if (!pad || !pad.connected) return none;
 
     const DEADZONE = 0.3;
-    const stickX = pad.leftStick ? pad.leftStick.x : 0;
-    const stickY = pad.leftStick ? pad.leftStick.y : 0;
+    const stickX = pad.axes[0] || 0;
+    const stickY = pad.axes[1] || 0;
     const btn = (i) => pad.buttons[i] && pad.buttons[i].pressed;
     const trigger = (i) => pad.buttons[i] && pad.buttons[i].value > 0.3;
 
     return {
-      left: pad.left || stickX < -DEADZONE,
-      right: pad.right || stickX > DEADZONE,
+      left: (pad.buttons[14] && pad.buttons[14].pressed) || stickX < -DEADZONE,
+      right: (pad.buttons[15] && pad.buttons[15].pressed) || stickX > DEADZONE,
       jump: btn(0),
-      down: pad.down || stickY > DEADZONE,
+      down: (pad.buttons[13] && pad.buttons[13].pressed) || stickY > DEADZONE,
       punch: btn(2),
       kick: btn(3),
       web: btn(1) || trigger(7),
-      webShoot: btn(4) || btn(5), // Bumpers for web shoot
+      webShoot: btn(4) || btn(5),
     };
   }
 
   isConnected() {
     if (this.config.type === 'keyboard') return true;
-    const pads = this.scene.input.gamepad;
-    if (!pads) return false;
-    const pad = pads.getPad(this.config.padIndex);
+    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+    const pad = pads[this.config.padIndex];
     return pad && pad.connected;
   }
 
-  static detectAnyPress(scene, excludeConfigs = []) {
+  static detectAnyPress(excludeConfigs = []) {
+    installKeyListeners();
     const excludeIds = excludeConfigs.map(c => c.id);
 
     // Check keyboards
     for (const configKey of ['KEYBOARD_1', 'KEYBOARD_2']) {
       const config = INPUT_CONFIGS[configKey];
       if (excludeIds.includes(config.id)) continue;
-      const kb = scene.input.keyboard;
       for (const keyCode of Object.values(config.keys)) {
-        if (keyCode !== null) {
-          const key = kb.addKey(keyCode, false, false);
-          if (key.isDown) return config;
-        }
+        if (keyCode !== null && keyState[keyCode]) return config;
       }
     }
 
     // Check gamepads
-    if (scene.input.gamepad) {
-      for (const configKey of ['GAMEPAD_0', 'GAMEPAD_1']) {
-        const config = INPUT_CONFIGS[configKey];
-        if (excludeIds.includes(config.id)) continue;
-        const pad = scene.input.gamepad.getPad(config.padIndex);
-        if (!pad || !pad.connected) continue;
-        for (let i = 0; i < pad.buttons.length; i++) {
-          if (pad.buttons[i] && pad.buttons[i].pressed) return config;
-        }
-        if (pad.leftStick && (Math.abs(pad.leftStick.x) > 0.5 || Math.abs(pad.leftStick.y) > 0.5)) {
-          return config;
-        }
+    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+    for (const configKey of ['GAMEPAD_0', 'GAMEPAD_1']) {
+      const config = INPUT_CONFIGS[configKey];
+      if (excludeIds.includes(config.id)) continue;
+      const pad = pads[config.padIndex];
+      if (!pad || !pad.connected) continue;
+      for (let i = 0; i < pad.buttons.length; i++) {
+        if (pad.buttons[i] && pad.buttons[i].pressed) return config;
+      }
+      if (Math.abs(pad.axes[0] || 0) > 0.5 || Math.abs(pad.axes[1] || 0) > 0.5) {
+        return config;
       }
     }
 

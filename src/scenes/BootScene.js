@@ -1,20 +1,20 @@
-import Phaser from 'phaser';
+import { Scene } from '../core/Scene.js';
 
-export class BootScene extends Phaser.Scene {
+export class BootScene extends Scene {
   constructor() {
     super('BootScene');
   }
 
   create() {
-    // Quick loading text
-    const text = this.add.text(640, 360, 'Loading...', {
-      fontSize: '24px',
-      fontFamily: 'monospace',
-      color: '#ffffff',
-    }).setOrigin(0.5);
+    // Hide HUD during boot
+    document.getElementById('hud').style.display = 'none';
+    this._timer = 0;
+  }
 
-    this.time.delayedCall(300, () => {
-      this.scene.start('TitleScene');
-    });
+  update(time, delta) {
+    this._timer += delta;
+    if (this._timer >= 300) {
+      this.game.startScene('TitleScene');
+    }
   }
 }
